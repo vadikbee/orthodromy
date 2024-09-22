@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orthodrome Service</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+
+        #map {
+            height: 700px;
+            margin: 20px auto;
+            width: 80%;
+        }
+
+        form {
+            display: inline-block;
+            text-align: left;
+        }
+
+        input, button {
+            display: block;
+            margin: 10px 0;
+            width: 100%;
+            padding: 8px;
+        }
+
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        button {
+            width: auto;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+</head>
+<body>
+    <h1>Ортодромия</h1>
+    <form id="form">
+        <label>Координаты начальной точки (долгота, широта):<br>
+        55.861090, 37.625316 (Москва)</label>
+        <input type="text" id="start_point" placeholder="Например, 37.625316, 55.861090"><br>
+
+        <label>Координаты конечной точки (долгота, широта):<br>
+        53.902735, 27.555691 (Беларусь)</label>
+        <input type="text" id="end_point" placeholder="Например, 27.555691, 53.902735"><br>
+
+        <label>Количество узлов:</label>
+        <input type="number" id="num_nodes" value="10"><br>
+
+        <button type="submit">Построить ортодромию</button>
+    </form>
+
+    <div id="map"></div>
+
+    <script>
+        ymaps.ready(init);
+        var myMap;
+
+        function init() {
+            myMap = new ymaps.Map("map", {
+                center: [55.751244, 37.618423],
+                zoom: 5
+            });
+
+            document.getElementById('form').addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
+                var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
+                var numNodes = parseInt(document.getElementById('num_nodes').value);
+
+                if (startPoint.length !== 2 || isNaN(startPoint[0]) || isNaN(startPoint[1])) {
+                    alert("Пожалуйста, введите корректные координаты начальной точки (долгота, широта).");
+                    return;
+                }
+                if (endPoint.length !== 2 || isNaN(endPoint[0]) || isNaN(endPoint[1])) {
+                    alert("Пожалуйста, введите корректные координаты конечной точки (долгота, широта).");
+                    return;
+                }
+                if (isNaN(numNodes) || numNodes < 2) {
+                    alert("Пожалуйста, введите корректное количество узлов (не менее 2).");
+                    return;
+                }
+
+                fetch('/orthodrome', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        start_point: startPoint,
+                        end_point: endPoint,
+                        num_nodes: numNodes
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    var coords = data.coordinates.map(coord => [coord[1], coord[0]]);
+
+                    var polyline = new ymaps.Polyline(coords, {}, {
+                        strokeWidth: 4,
+                        strokeColor: "#0000FF"
+                    });
+
+                    myMap.geoObjects.add(polyline);
+                    myMap.setBounds(polyline.getBounds(), { checkZoomRange: true });
+
+                    // Анимация самолета
+                    animatePlane(coords);
+                })
+                .catch(error => console.error('Ошибка:', error));
+            });
+        }
+
+        function animatePlane(coords) {
+            var plane = new ymaps.Placemark(coords[0], {}, {
+                iconLayout: 'default#image',
+                iconImageHref: 'https://w7.pngwing.com/pngs/73/545/png-transparent-aeroplane-plane-aircraft-airplane.png', // URL изображения самолета
+                iconImageSize: [50, 50], // Размер изображения самолета
+                iconImageOffset: [-25, -25] // Сместить иконку по центру
+            });
+
+            myMap.geoObjects.add(plane);
+
+            var i = 0;
+            var interval = setInterval(function() {
+                if (i < coords.length) {
+                    plane.geometry.setCoordinates(coords[i]);
+                    i++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 500); // 500 мс между перемещениями
+        }
+    </script>
+</body>
+
+
+</html>
+

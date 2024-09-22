@@ -8,24 +8,34 @@
         body {
             text-align: center;
             font-family: Arial, sans-serif;
+            background-image: url('https://avatars.mds.yandex.net/i?id=50a1c8ff239e57b2decd55aee538c13c5fe6d86b-7754220-images-thumbs&n=13'); /*  URL  изображения */
+            background-size: cover; /* Заполнение всего экрана */
+            background-position: center; /* Центрирование фона */
+            color: black; /* Цвет текста */
         }
 
         #map {
             height: 700px;
             margin: 20px auto;
             width: 80%;
+            border: 10px solid rgba(0, 0, 0, 0.5); /* Полупрозрачный красный */
+ /* chern рамка вокруг карты */
         }
 
         form {
             display: inline-block;
             text-align: left;
+            background-color: rgba(0, 0, 0, 0.4); /* Полупрозрачный фон для формы */
+            padding: 20px;
+            border-radius: 10px; /* Скругленные углы */
         }
 
         input, button {
             display: block;
-            margin: 10px 0;
+            margin: 10px 15;
             width: 100%;
-            padding: 8px;
+            padding: 5px;
+            text-align: center;
         }
 
         label {
@@ -40,6 +50,7 @@
             color: white;
             border: none;
             cursor: pointer;
+            text-align: center;
         }
 
         button:hover {
@@ -114,7 +125,7 @@
 
                     var polyline = new ymaps.Polyline(coords, {}, {
                         strokeWidth: 4,
-                        strokeColor: "#0000FF"
+                        strokeColor: "rgb(155, 16, 17)"
                     });
 
                     myMap.geoObjects.add(polyline);
@@ -149,7 +160,4 @@
         }
     </script>
 </body>
-
-
 </html>
-

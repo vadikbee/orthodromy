@@ -8,29 +8,28 @@
         body {
             text-align: center;
             font-family: Arial, sans-serif;
-            background-image: url('https://avatars.mds.yandex.net/i?id=50a1c8ff239e57b2decd55aee538c13c5fe6d86b-7754220-images-thumbs&n=13'); /*  URL  изображения */
-            background-size: cover; /* Заполнение всего экрана */
-            background-position: center; /* Центрирование фона */
-            color: black; /* Цвет текста */
+            background-image: url('https://avatars.mds.yandex.net/i?id=50a1c8ff239e57b2decd55aee538c13c5fe6d86b-7754220-images-thumbs&n=13');
+            background-size: cover;
+            background-position: center;
+            color: black;
         }
 
         #map {
             height: 700px;
             margin: 20px auto;
             width: 80%;
-            border: 10px solid rgba(0, 0, 0, 0.5); /* Полупрозрачный красный */
- /* chern рамка вокруг карты */
+            border: 10px solid rgba(0, 0, 0, 0.5);
         }
 
         form {
             display: inline-block;
             text-align: left;
-            background-color: rgba(0, 0, 0, 0.4); /* Полупрозрачный фон для формы */
+            background-color: rgba(0, 0, 0, 0.4);
             padding: 20px;
-            border-radius: 10px; /* Скругленные углы */
+            border-radius: 10px;
         }
 
-        input, button {
+        input {
             display: block;
             margin: 10px 15;
             width: 100%;
@@ -43,6 +42,12 @@
             margin-top: 10px;
         }
 
+        .buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px; /* Отступ между кнопками */
+        }
+
         button {
             width: auto;
             padding: 10px 20px;
@@ -50,7 +55,7 @@
             color: white;
             border: none;
             cursor: pointer;
-            text-align: center;
+            margin-left: 10px; /* Отступ слева */
         }
 
         button:hover {
@@ -71,16 +76,19 @@
         <input type="text" id="end_point" placeholder="Например, 27.555691, 53.902735"><br>
 
         <label>Количество узлов:</label>
-        <input type="number" id="num_nodes" value="10"><br>
+        <input type="number" id="num_nodes" value="20"><br> <!-- Увеличено количество узлов -->
 
-        <button type="submit">Построить ортодромию</button>
+        <div class="buttons">
+            <button type="submit">Построить ортодромию</button>
+            <button type="button" id="toggle-curve">Переключить на кривую линию</button>
+        </div>
     </form>
 
     <div id="map"></div>
 
     <script>
         ymaps.ready(init);
-        var myMap;
+        var myMap, isOrthodrome = true, coords;
 
         function init() {
             myMap = new ymaps.Map("map", {
@@ -90,60 +98,70 @@
 
             document.getElementById('form').addEventListener('submit', function (event) {
                 event.preventDefault();
-
-                var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
-                var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
-                var numNodes = parseInt(document.getElementById('num_nodes').value);
-
-                if (startPoint.length !== 2 || isNaN(startPoint[0]) || isNaN(startPoint[1])) {
-                    alert("Пожалуйста, введите корректные координаты начальной точки (долгота, широта).");
-                    return;
-                }
-                if (endPoint.length !== 2 || isNaN(endPoint[0]) || isNaN(endPoint[1])) {
-                    alert("Пожалуйста, введите корректные координаты конечной точки (долгота, широта).");
-                    return;
-                }
-                if (isNaN(numNodes) || numNodes < 2) {
-                    alert("Пожалуйста, введите корректное количество узлов (не менее 2).");
-                    return;
-                }
-
-                fetch('/orthodrome', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        start_point: startPoint,
-                        end_point: endPoint,
-                        num_nodes: numNodes
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    var coords = data.coordinates.map(coord => [coord[1], coord[0]]);
-
-                    var polyline = new ymaps.Polyline(coords, {}, {
-                        strokeWidth: 4,
-                        strokeColor: "rgb(155, 16, 17)"
-                    });
-
-                    myMap.geoObjects.add(polyline);
-                    myMap.setBounds(polyline.getBounds(), { checkZoomRange: true });
-
-                    // Анимация самолета
-                    animatePlane(coords);
-                })
-                .catch(error => console.error('Ошибка:', error));
+                buildRoute();
             });
+
+            document.getElementById('toggle-curve').addEventListener('click', function () {
+                isOrthodrome = !isOrthodrome;
+                buildRoute();
+            });
+        }
+
+        function buildRoute() {
+            var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
+            var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
+            var numNodes = parseInt(document.getElementById('num_nodes').value);
+
+            if (startPoint.length !== 2 || isNaN(startPoint[0]) || isNaN(startPoint[1])) {
+                alert("Пожалуйста, введите корректные координаты начальной точки (долгота, широта).");
+                return;
+            }
+            if (endPoint.length !== 2 || isNaN(endPoint[0]) || isNaN(endPoint[1])) {
+                alert("Пожалуйста, введите корректные координаты конечной точки (долгота, широта).");
+                return;
+            }
+            if (isNaN(numNodes) || numNodes < 2) {
+                alert("Пожалуйста, введите корректное количество узлов (не менее 2).");
+                return;
+            }
+
+            fetch('/orthodrome', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    start_point: startPoint,
+                    end_point: endPoint,
+                    num_nodes: numNodes + 20,  // Увеличение количества узлов для большей кривизны
+                    orthodrome: isOrthodrome
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                coords = data.coordinates.map(coord => [coord[1], coord[0]]);
+
+                myMap.geoObjects.removeAll();
+
+                var polyline = new ymaps.Polyline(coords, {}, {
+                    strokeWidth: 4,
+                    strokeColor: isOrthodrome ? "rgb(155, 16, 17)" : "rgb(0, 0, 255)"
+                });
+
+                myMap.geoObjects.add(polyline);
+                myMap.setBounds(polyline.getBounds(), { checkZoomRange: true });
+
+                animatePlane(coords);
+            })
+            .catch(error => console.error('Ошибка:', error));
         }
 
         function animatePlane(coords) {
             var plane = new ymaps.Placemark(coords[0], {}, {
                 iconLayout: 'default#image',
-                iconImageHref: 'https://w7.pngwing.com/pngs/73/545/png-transparent-aeroplane-plane-aircraft-airplane.png', // URL изображения самолета
-                iconImageSize: [50, 50], // Размер изображения самолета
-                iconImageOffset: [-25, -25] // Сместить иконку по центру
+                iconImageHref: 'https://w7.pngwing.com/pngs/73/545/png-transparent-aeroplane-plane-aircraft-airplane.png',
+                iconImageSize: [50, 50],
+                iconImageOffset: [-25, -25]
             });
 
             myMap.geoObjects.add(plane);
@@ -156,7 +174,7 @@
                 } else {
                     clearInterval(interval);
                 }
-            }, 500); // 500 мс между перемещениями
+            }, 500);
         }
     </script>
 </body>

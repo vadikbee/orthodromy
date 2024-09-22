@@ -10,20 +10,19 @@ geod = Geod(ellps="WGS84")
 # Маршрут для отображения HTML-страницы
 @app.route('/', methods=['GET'])
 def index():
-
     return render_template("zad.html")
 
 
-# Маршрут для обработки POST-запроса и расчета ортодромии
+# Маршрут для обработки POST-запроса и расчета ортодромии или прямой линии
 @app.route('/orthodrome', methods=['POST'])
 def orthodrome():
-    data = request.json  # Получаем данные
+    data = request.json
 
     start_point = data.get('start_point')
     end_point = data.get('end_point')
     num_nodes = data.get('num_nodes')
+    is_orthodrome = data.get('orthodrome', True)
 
-    # Проверяем, что все входные данные заданы корректно
     if not (isinstance(start_point, list) and len(start_point) == 2):
         return jsonify({"error": "Invalid start_point"}), 400
     if not (isinstance(end_point, list) and len(end_point) == 2):
@@ -34,26 +33,16 @@ def orthodrome():
     lon1, lat1 = start_point
     lon2, lat2 = end_point
 
-    # Получаем список кортежей (долгота, широта)
-    points = geod.npts(lon1, lat1, lon2, lat2, num_nodes - 2)
+    if is_orthodrome:
+        # Ортодромический маршрут с большим количеством узлов
+        points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 10)  # Больше узлов для большей кривизны
+    else:
+        # Прямой маршрут
+        lons = [lon1 + (lon2 - lon1) * i / (num_nodes - 1) for i in range(num_nodes)]
+        lats = [lat1 + (lat2 - lat1) * i / (num_nodes - 1) for i in range(num_nodes)]
+        points = zip(lons, lats)
 
-    # Преобразуем список кортежей в два отдельных списка долгот и широт
-    lons, lats = zip(*points)
-
-    # Добавляем начальную и конечную точку в результат
-    coordinates = [(lon1, lat1)] + list(zip(lons, lats)) + [(lon2, lat2)]
-
-    return jsonify({"coordinates": coordinates})
-
-
-    # Получаем список кортежей (долгота, широта)
-    points = geod.npts(lon1, lat1, lon2, lat2, num_nodes - 2)
-
-    # Преобразуем список кортежей в два отдельных списка долгот и широт
-    lons, lats = zip(*points)
-
-    # Добавляем начальную и конечную точку в результат
-    coordinates = [(lon1, lat1)] + list(zip(lons, lats)) + [(lon2, lat2)]
+    coordinates = [(lon1, lat1)] + list(points) + [(lon2, lat2)]
 
     return jsonify({"coordinates": coordinates})
 

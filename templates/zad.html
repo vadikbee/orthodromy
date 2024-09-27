@@ -42,13 +42,16 @@
             margin-top: 10px;
         }
 
-        .buttons {
+        .buttons { //стиль элементов класса кнопки
             display: flex;
             justify-content: space-between;
             margin-top: 10px; /* Отступ между кнопками */
+
         }
 
-        button {
+
+
+        button { // настройки обеих кнопок
             width: auto;
             padding: 10px 20px;
             background-color: #4CAF50;
@@ -56,16 +59,25 @@
             border: none;
             cursor: pointer;
             margin-left: 10px; /* Отступ слева */
+
         }
 
         button:hover {
             background-color: #45a049;
         }
+
+        #krivaya-text {
+            font-size: 16px;
+            color: black;
+        }
+
     </style>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
 </head>
 <body>
     <h1>Ортодромия</h1>
+    <div id="krivaya-text">Это текст в левом верхнем углу</div>
+
     <form id="form">
         <label>Координаты начальной точки (долгота, широта):<br>
         55.861090, 37.625316 (Москва)</label>
@@ -79,16 +91,21 @@
         <input type="number" id="num_nodes" value="20"><br> <!-- Увеличено количество узлов -->
 
         <div class="buttons">
-            <button type="submit">Построить ортодромию</button>
-            <button type="button" id="toggle-curve">Переключить на кривую линию</button>
+            <button type="submit" id="postroit">Построить ортодромию</button> <!--наши кнопки добавил id -->
+            <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
+
         </div>
     </form>
 
     <div id="map"></div>
 
+
     <script>
+
         ymaps.ready(init);
         var myMap, isOrthodrome = true, coords;
+
+
 
         function init() {
             myMap = new ymaps.Map("map", {
@@ -101,11 +118,30 @@
                 buildRoute();
             });
 
-            document.getElementById('toggle-curve').addEventListener('click', function () {
+            document.getElementById('toggle-curve').addEventListener('click', function () { // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 isOrthodrome = !isOrthodrome;
                 buildRoute();
+                actionButton.disabled = false;
             });
+            document.getElementById('postroit').addEventListener('click', function () {
+
+                 actionButton.disabled = false;
+                buildRoute();
+
+            });
+
+
         }
+
+        function scaleText() { //работа с текстом
+            let textElement = document.getElementById('krivaya-text');
+            let width = window.innerWidth; // Получаем ширину окна
+            let newFontSize = width * 0.011; // Размер шрифта % от ширины окна
+            textElement.style.fontSize = newFontSize + 'px';
+        }
+         scaleText();
+         window.addEventListener('resize', scaleText);
+
 
         function buildRoute() {
             var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
@@ -151,31 +187,14 @@
                 myMap.geoObjects.add(polyline);
                 myMap.setBounds(polyline.getBounds(), { checkZoomRange: true });
 
-                animatePlane(coords);
+
             })
             .catch(error => console.error('Ошибка:', error));
         }
 
-        function animatePlane(coords) {
-            var plane = new ymaps.Placemark(coords[0], {}, {
-                iconLayout: 'default#image',
-                iconImageHref: 'https://w7.pngwing.com/pngs/73/545/png-transparent-aeroplane-plane-aircraft-airplane.png',
-                iconImageSize: [50, 50],
-                iconImageOffset: [-25, -25]
-            });
+    document.getElementById('krivaya-text').style.textAlign = 'left';
 
-            myMap.geoObjects.add(plane);
-
-            var i = 0;
-            var interval = setInterval(function() {
-                if (i < coords.length) {
-                    plane.geometry.setCoordinates(coords[i]);
-                    i++;
-                } else {
-                    clearInterval(interval);
-                }
-            }, 500);
-        }
     </script>
+
 </body>
 </html>

@@ -23,7 +23,7 @@ def orthodrome():
     num_nodes = data.get('num_nodes')
     is_orthodrome = data.get('orthodrome', True)
 
-    if not (isinstance(start_point, list) and len(start_point) == 2):
+    if not (isinstance(start_point, list) and len(start_point) == 2): #передача координат и проверки корректности
         return jsonify({"error": "Invalid start_point"}), 400
     if not (isinstance(end_point, list) and len(end_point) == 2):
         return jsonify({"error": "Invalid end_point"}), 400

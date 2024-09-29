@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -29,7 +29,7 @@
             border-radius: 10px;
         }
 
-        input {
+        input { //ввод
             display: block;
             margin: 10px 15;
             width: 100%;
@@ -46,10 +46,7 @@
             display: flex;
             justify-content: space-between;
             margin-top: 10px; /* Отступ между кнопками */
-
         }
-
-
 
         button { // настройки обеих кнопок
             width: auto;
@@ -59,7 +56,6 @@
             border: none;
             cursor: pointer;
             margin-left: 10px; /* Отступ слева */
-
         }
 
         button:hover {
@@ -67,16 +63,22 @@
         }
 
         #krivaya-text {
-            font-size: 16px;
+            font-size: 20px;
             color: black;
+            padding: 10px 20px;
         }
-
+        #krivaya2-text {
+            font-size: 20px;
+            color: black;
+            padding: 30px 20px;
+        }
     </style>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
 </head>
 <body>
     <h1>Ортодромия</h1>
-    <div id="krivaya-text">Это текст в левом верхнем углу</div>
+    <div id="krivaya-text"><label><span style="color: blue;">Синяя</span> линия - кривая</label></div>
+    <div id="krivaya2-text"><label><span style="color: rgb(155, 16, 17);">Бордовая</span> линия - прямая</label></div>
 
     <form id="form">
         <label>Координаты начальной точки (долгота, широта):<br>
@@ -88,24 +90,21 @@
         <input type="text" id="end_point" placeholder="Например, 27.555691, 53.902735"><br>
 
         <label>Количество узлов:</label>
-        <input type="number" id="num_nodes" value="20"><br> <!-- Увеличено количество узлов -->
+        <input type="number" id="num_nodes" value="20"><br>
 
         <div class="buttons">
-            <button type="submit" id="postroit">Построить ортодромию</button> <!--наши кнопки добавил id -->
+            <button type="submit" id="postroit">Построить ортодромию</button>
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
-
+            <button type="button" id="reset">Сбросить</button>
         </div>
     </form>
 
     <div id="map"></div>
 
-
     <script>
-
         ymaps.ready(init);
         var myMap, isOrthodrome = true, coords;
-
-
+        var startMarker, endMarker;
 
         function init() {
             myMap = new ymaps.Map("map", {
@@ -113,35 +112,68 @@
                 zoom: 5
             });
 
+            // Обработчик клика на карту
+            myMap.events.add('click', function (e) {
+                var coords = e.get('coords');
+                if (!startMarker) {
+                    addStartMarker(coords);
+                } else if (!endMarker) {
+                    addEndMarker(coords);
+                } else {
+                    alert("Уже установлены обе точки. Сбросьте, чтобы установить новые.");
+                }
+            });
+
             document.getElementById('form').addEventListener('submit', function (event) {
                 event.preventDefault();
                 buildRoute();
             });
 
-            document.getElementById('toggle-curve').addEventListener('click', function () { // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            document.getElementById('toggle-curve').addEventListener('click', function () {
                 isOrthodrome = !isOrthodrome;
                 buildRoute();
-                actionButton.disabled = false;
-            });
-            document.getElementById('postroit').addEventListener('click', function () {
-
-                 actionButton.disabled = false;
-                buildRoute();
-
             });
 
-
+            document.getElementById('reset').addEventListener('click', function () {
+                resetMap();
+            });
         }
 
-        function scaleText() { //работа с текстом
-            let textElement = document.getElementById('krivaya-text');
-            let width = window.innerWidth; // Получаем ширину окна
-            let newFontSize = width * 0.011; // Размер шрифта % от ширины окна
-            textElement.style.fontSize = newFontSize + 'px';
-        }
-         scaleText();
-         window.addEventListener('resize', scaleText);
+        function addStartMarker(coords) {
+            // Удаляем старый начальный маркер, если он есть
+            if (startMarker) {
+                myMap.geoObjects.remove(startMarker);
+            }
 
+            // Создаем новый маркер для начальной точки и добавляем его на карту
+            startMarker = new ymaps.Placemark(coords, {
+                balloonContent: 'Начальная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
+            }, {
+                preset: 'islands#icon',
+                iconColor: '#0095b6'
+            });
+
+            myMap.geoObjects.add(startMarker);
+            document.getElementById('start_point').value = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
+        }
+
+        function addEndMarker(coords) {
+            // Удаляем старый конечный маркер, если он есть
+            if (endMarker) {
+                myMap.geoObjects.remove(endMarker);
+            }
+
+            // Создаем новый маркер для конечной точки и добавляем его на карту
+            endMarker = new ymaps.Placemark(coords, {
+                balloonContent: 'Конечная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
+            }, {
+                preset: 'islands#icon',
+                iconColor: '#ff0000'
+            });
+
+            myMap.geoObjects.add(endMarker);
+            document.getElementById('end_point').value = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
+        }
 
         function buildRoute() {
             var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
@@ -169,7 +201,7 @@
                 body: JSON.stringify({
                     start_point: startPoint,
                     end_point: endPoint,
-                    num_nodes: numNodes + 20,  // Увеличение количества узлов для большей кривизны
+                    num_nodes: numNodes,
                     orthodrome: isOrthodrome
                 })
             })
@@ -186,15 +218,19 @@
 
                 myMap.geoObjects.add(polyline);
                 myMap.setBounds(polyline.getBounds(), { checkZoomRange: true });
-
-
             })
             .catch(error => console.error('Ошибка:', error));
         }
 
-    document.getElementById('krivaya-text').style.textAlign = 'left';
-
+        function resetMap() {
+            myMap.geoObjects.removeAll();
+            startMarker = null;
+            endMarker = null;
+            document.getElementById('start_point').value = '';
+            document.getElementById('end_point').value = '';
+            document.getElementById('num_nodes').value = '20';
+            isOrthodrome = true; // Сбрасываем кривая/прямая к кривой
+        }
     </script>
-
 </body>
 </html>

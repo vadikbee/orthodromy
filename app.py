@@ -7,10 +7,16 @@ app = Flask(__name__)
 geod = Geod(ellps="WGS84")
 
 
-# Маршрут для отображения HTML-страницы
+# Маршрут для отображения главной HTML-страницы
 @app.route('/', methods=['GET'])
 def index():
     return render_template("zad.html")
+
+
+# Маршрут для новой страницы elevation
+@app.route('/elevation-map', methods=['GET'])
+def elevation_map():
+    return render_template("elevation.html")
 
 
 # Маршрут для обработки POST-запроса и расчета ортодромии или прямой линии
@@ -23,7 +29,7 @@ def orthodrome():
     num_nodes = data.get('num_nodes')
     is_orthodrome = data.get('orthodrome', True)
 
-    if not (isinstance(start_point, list) and len(start_point) == 2): #передача координат и проверки корректности
+    if not (isinstance(start_point, list) and len(start_point) == 2):
         return jsonify({"error": "Invalid start_point"}), 400
     if not (isinstance(end_point, list) and len(end_point) == 2):
         return jsonify({"error": "Invalid end_point"}), 400

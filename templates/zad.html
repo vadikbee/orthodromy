@@ -72,6 +72,16 @@
             color: black;
             padding: 30px 20px;
         }
+        #elevation {  /* кнопка на новую страницу */
+             padding: 30px 20px;
+            color: white;
+            background-color: black;
+             position: relative;
+             top:-400px;
+             right:-1050px;
+             border-radius: 80%;
+
+        }
     </style>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
 </head>
@@ -96,7 +106,12 @@
             <button type="submit" id="postroit">Построить ортодромию</button>
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
             <button type="button" id="reset">Сбросить</button>
+
         </div>
+        <button onclick="window.location.href='/elevation-map'" id="elevation">Перейти на карту для WKT</button>
+
+
+
     </form>
 
     <div id="map"></div>

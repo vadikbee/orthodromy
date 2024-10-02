@@ -77,7 +77,15 @@ def get_elevation():
     if result_wkt is None:
         return jsonify({"error": "Invalid WKT format."}), 400
 
-    return jsonify({"result_wkt": result_wkt})
+    # Получаем границы DEM
+    dem_bounds = get_dem_bounds()
+    if isinstance(dem_bounds, tuple):
+        return dem_bounds  # Если возникла ошибка, возвращаем ответ с ошибкой
+
+    return jsonify({
+        "result_wkt": result_wkt,
+        "dem_bounds": dem_bounds
+    })
 
 def add_elevation_to_wkt(wkt):
     coords_with_elevation = []
@@ -86,24 +94,29 @@ def add_elevation_to_wkt(wkt):
         # Парсим координаты для POINT
         coords = parse_wkt_point(wkt)
         if coords:
-            x, y = coords
-            elevation = get_elevation_from_dem(x, y)
-            return f"POINT({x} {y} {elevation})"
+            y, x = coords  # Изменяем порядок на (широта, долгота)
+            elevation = get_elevation_from_dem(x, y)  # Передаем (долгота, широта)
+            if elevation is not None:
+                return f"POINT({int(y)} {int(x)} {elevation})"  # Поменяли порядок на (широта, долгота)
+            else:
+                return f"POINT({int(y)} {int(x)} 0)"  # Возвращаем высоту 0, если не удалось найти
 
     elif wkt.startswith("LINESTRING"):
         # Парсим координаты для LINESTRING
         coords = parse_wkt_linestring(wkt)
         if coords:
-            for x, y in coords:
-                elevation = get_elevation_from_dem(x, y)
-                coords_with_elevation.append(f"{x} {y} {elevation}")
+            for y, x in coords:  # Изменяем порядок на (широта, долгота)
+                elevation = get_elevation_from_dem(x, y)  # Передаем (долгота, широта)
+                if elevation is not None:
+                    coords_with_elevation.append(f"{int(y)} {int(x)} {elevation}")  # Поменяли порядок на (широта, долгота)
+                else:
+                    coords_with_elevation.append(f"{int(y)} {int(x)} 0")  # Если высота не найдена, ставим 0
             return f"LINESTRING({', '.join(coords_with_elevation)})"
 
     return None
 
 def parse_wkt_point(wkt):
     try:
-        # Извлекаем координаты из WKT для POINT
         coords = wkt[wkt.index("(") + 1:wkt.index(")")].split()
         return list(map(float, coords))
     except Exception as e:
@@ -112,7 +125,6 @@ def parse_wkt_point(wkt):
 
 def parse_wkt_linestring(wkt):
     try:
-        # Извлекаем координаты из WKT для LINESTRING
         coords = wkt[wkt.index("(") + 1:wkt.index(")")].split(",")
         return [list(map(float, coord.strip().split())) for coord in coords]
     except Exception as e:
@@ -124,36 +136,27 @@ def is_within_bounds(lon, lat, dataset):
     bounds = dataset.bounds
     return bounds.left <= lon <= bounds.right and bounds.bottom <= lat <= bounds.top
 
-def get_elevation_from_dem(lon, lat):
-    """
-    Получает высоту из DEM-файла на основе долготы и широты.
-    """
+def get_dem_bounds():
     try:
         with rasterio.open(DEM_FILE_PATH) as dataset:
-            # Проверяем, что координаты находятся в пределах данных
-            if not is_within_bounds(lon, lat, dataset):
-                print(f"Coordinates ({lon}, {lat}) are out of DEM bounds.")
-                return None
-
-            # Преобразуем координаты из географических (lon, lat) в систему координат DEM-файла
-            transformed_coords = transform('EPSG:4326', dataset.crs, [lon], [lat])
-            row, col = dataset.index(transformed_coords[0][0], transformed_coords[1][0])
-
-            # Проверяем, что координаты находятся в пределах массива данных
-            if 0 <= row < dataset.height and 0 <= col < dataset.width:
-                # Получаем значение высоты (elevation) для данных координат
-                elevation = dataset.read(1)[row, col]
-                return elevation
-            else:
-                print(f"Coordinates ({lon}, {lat}) are out of bounds of the DEM file.")
-                return None
+            bounds = dataset.bounds
+            return {
+                'left': bounds.left,
+                'bottom': bounds.bottom,
+                'right': bounds.right,
+                'top': bounds.top
+            }
     except Exception as e:
-        print(f"Error getting elevation: {e}")
-        return None
+        return jsonify({'error': str(e)}), 500
+
 def get_elevation_from_dem(lon, lat):
     """Получает высоту из DEM-файла на основе долготы и широты."""
     try:
         with rasterio.open(DEM_FILE_PATH) as dataset:
+            # Логируем информацию о границах DEM
+            bounds = dataset.bounds
+            print(f"DEM bounds: {bounds}")
+
             # Проверяем, что координаты находятся в пределах данных
             if not is_within_bounds(lon, lat, dataset):
                 print(f"Coordinates ({lon}, {lat}) are out of DEM bounds.")
@@ -161,23 +164,21 @@ def get_elevation_from_dem(lon, lat):
 
             # Преобразуем координаты из географических (lon, lat) в систему координат DEM-файла
             transformed_coords = transform('EPSG:4326', dataset.crs, [lon], [lat])
+            print(f"Transformed coordinates: {transformed_coords}")
+
             row, col = dataset.index(transformed_coords[0][0], transformed_coords[1][0])
 
             # Проверяем, что координаты находятся в пределах массива данных
             if 0 <= row < dataset.height and 0 <= col < dataset.width:
-                # Получаем значение высоты (elevation) для данных координат
                 elevation = dataset.read(1)[row, col]
-                print(f"Elevation at ({lon}, {lat}): {elevation}")  # Отладочное сообщение
-                return elevation
+                print(f"Elevation at ({lon}, {lat}): {elevation}")
+                return round(elevation)  # Округляем до целого
             else:
                 print(f"Coordinates ({lon}, {lat}) are out of bounds of the DEM file.")
                 return None
     except Exception as e:
         print(f"Error getting elevation: {e}")
         return None
-
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)

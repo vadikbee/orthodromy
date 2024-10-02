@@ -107,6 +107,11 @@
         <textarea id="wkt-output-linestring" rows="2" placeholder="Результат WKT с высотой" readonly></textarea>
     </div>
 
+    <div class="output-container">
+        <h3>Границы DEM файла</h3>
+        <textarea id="dem-bounds-output" rows="2" placeholder="Границы DEM" readonly></textarea>
+    </div>
+
     <div id="map"></div>
 
     <script>
@@ -155,6 +160,15 @@
             .then(data => {
                 if (data.result_wkt) {
                     document.getElementById(outputField).value = data.result_wkt;
+
+                    // Отображаем границы DEM
+                    if (data.dem_bounds) {
+                        const bounds = data.dem_bounds;
+                        document.getElementById('dem-bounds-output').innerHTML =
+                            `Left: ${bounds.left}, Right: ${bounds.right}, Bottom: ${bounds.bottom}, Top: ${bounds.top}`;
+                    } else {
+                        document.getElementById('dem-bounds-output').innerHTML = "Границы DEM не найдены.";
+                    }
                 } else {
                     alert("Ошибка обработки WKT: " + (data.error || "Неизвестная ошибка"));
                 }
@@ -163,6 +177,10 @@
                 console.error('Ошибка:', error);
             });
         }
+
+
+
+
     </script>
 </body>
 </html>

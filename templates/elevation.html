@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WKT Map</title>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+    <style>
+        body {
+            background-image: url('https://img.goodfon.ru/original/4910x3200/c/bd/mountain-snow-sunset.jpg');
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+
+        #map {
+            height: 700px;
+            margin: 20px auto;
+            width: 80%;
+            border: 10px solid rgba(0, 0, 0, 0.5);
+            position: relative;
+            top: 20px;
+        }
+
+        .input-container, .output-container {
+            margin: 20px;
+        }
+
+        textarea {
+            margin: 10px auto;
+            width: 80%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: block;
+        }
+
+        .back-button, .submit-button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            font-size: 16px;
+            margin: 10px auto;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        .back-button {
+            background-color: black;
+        }
+
+        .back-button:hover, .submit-button:hover {
+            background-color: #333;
+        }
+
+        .submit-button:hover {
+            background-color: #45a049;
+        }
+
+        .header-container {
+            position: relative;
+        }
+
+        .header-container h1 {
+            margin-bottom: 20px;
+        }
+
+        .back-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>Выбор WKT на карте</h1>
+        <button class="back-button" onclick="window.location.href='/'">На главную</button>
+    </div>
+
+    <div class="input-container">
+        <h3>Введите WKT для POINT</h3>
+        <textarea id="wkt-input-point" rows="2" placeholder="Введите WKT для POINT"></textarea>
+    </div>
+
+    <div class="input-container">
+        <h3>Введите WKT для LINESTRING</h3>
+        <textarea id="wkt-input-linestring" rows="2" placeholder="Введите WKT для LINESTRING"></textarea>
+    </div>
+
+    <button class="submit-button" onclick="processAllWKT()">Отправить результаты</button>
+
+    <div class="output-container">
+        <h3>Результат WKT для POINT с высотой</h3>
+        <textarea id="wkt-output-point" rows="2" placeholder="Результат WKT с высотой" readonly></textarea>
+    </div>
+
+    <div class="output-container">
+        <h3>Результат WKT для LINESTRING с высотой</h3>
+        <textarea id="wkt-output-linestring" rows="2" placeholder="Результат WKT с высотой" readonly></textarea>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        ymaps.ready(init);
+
+        function init() {
+            var myMap = new ymaps.Map("map", {
+                center: [55.751244, 37.618423],
+                zoom: 5
+            });
+
+            // Обработчик клика на карту для выбора точки
+            myMap.events.add('click', function (e) {
+                var coords = e.get('coords');
+                document.getElementById('wkt-input-point').value = `POINT(${coords[0]} ${coords[1]})`;
+            });
+        }
+
+        function processAllWKT() {
+            // Получаем WKT для POINT и LINESTRING
+            var pointWKT = document.getElementById('wkt-input-point').value;
+            var lineStringWKT = document.getElementById('wkt-input-linestring').value;
+
+            // Проверка заполненности полей
+            if (!pointWKT && !lineStringWKT) {
+                alert("Введите хотя бы один WKT (POINT или LINESTRING).");
+                return;
+            }
+
+            // Обработка POINT
+            if (pointWKT) {
+                sendWKT(pointWKT, 'wkt-output-point');
+            }
+
+            // Обработка LINESTRING
+            if (lineStringWKT) {
+                sendWKT(lineStringWKT, 'wkt-output-linestring');
+            }
+        }
+
+        function sendWKT(wkt, outputField) {
+            fetch(`/elevation?wkt=${encodeURIComponent(wkt)}`, {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.result_wkt) {
+                    document.getElementById(outputField).value = data.result_wkt;
+                } else {
+                    alert("Ошибка обработки WKT: " + (data.error || "Неизвестная ошибка"));
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+            });
+        }
+    </script>
+</body>
+</html>

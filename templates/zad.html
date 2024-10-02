@@ -12,6 +12,7 @@
             background-size: cover;
             background-position: center;
             color: black;
+            padding: 20px;
         }
 
         #map {
@@ -23,18 +24,20 @@
 
         form {
             display: inline-block;
-            text-align: left;
+            text-align: center;
             background-color: rgba(0, 0, 0, 0.4);
-            padding: 20px;
+            padding: 10px 20px;
             border-radius: 10px;
+
         }
 
-        input { //ввод
+        input { /* ввод*/
             display: block;
             margin: 10px 15;
             width: 100%;
             padding: 5px;
             text-align: center;
+            margin-top: 10px;
         }
 
         label {
@@ -42,7 +45,7 @@
             margin-top: 10px;
         }
 
-        .buttons { //стиль элементов класса кнопки
+        .buttons {
             display: flex;
             justify-content: space-between;
             margin-top: 10px; /* Отступ между кнопками */
@@ -50,12 +53,13 @@
 
         button { // настройки обеих кнопок
             width: auto;
-            padding: 10px 20px;
+            padding: 15px 20px;
             background-color: #4CAF50;
             color: white;
             border: none;
             cursor: pointer;
             margin-left: 10px; /* Отступ слева */
+            margin-top: 10px;
         }
 
         button:hover {
@@ -72,14 +76,31 @@
             color: black;
             padding: 30px 20px;
         }
-        #elevation {  /* кнопка на новую страницу */
-             padding: 30px 20px;
-            color: white;
+
+        #elevation {
             background-color: black;
-             position: relative;
-             top:-400px;
-             right:-1050px;
-             border-radius: 80%;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: block; /* Изменено на block для выравнивания */
+            font-size: 16px;
+            margin: 10px auto; /* Центрирование кнопок */
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        #elevation {
+            position: absolute; /* Фиксированное положение */
+            top: 50px; /* Отступ сверху */
+            left: 30px; /* Отступ слева */
+
+        }
+        #elevation:hover, .submit-button:hover {
+            background-color: #333; /* Темнее при наведении */
+        }
 
         }
     </style>
@@ -106,9 +127,9 @@
             <button type="submit" id="postroit">Построить ортодромию</button>
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
             <button type="button" id="reset">Сбросить</button>
-
+            <button onclick="window.location.href='/elevation-map'" id="elevation">Перейти на карту для WKT</button>
         </div>
-        <button onclick="window.location.href='/elevation-map'" id="elevation">Перейти на карту для WKT</button>
+
 
 
 
@@ -138,6 +159,9 @@
                     alert("Уже установлены обе точки. Сбросьте, чтобы установить новые.");
                 }
             });
+
+
+
 
             document.getElementById('form').addEventListener('submit', function (event) {
                 event.preventDefault();
@@ -195,17 +219,19 @@
             var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
             var numNodes = parseInt(document.getElementById('num_nodes').value);
 
+            if (event && event.target && event.target.id === 'elevation') {  // блокирую условия для кнопки elevation
             if (startPoint.length !== 2 || isNaN(startPoint[0]) || isNaN(startPoint[1])) {
                 alert("Пожалуйста, введите корректные координаты начальной точки (долгота, широта).");
                 return;
             }
             if (endPoint.length !== 2 || isNaN(endPoint[0]) || isNaN(endPoint[1])) {
-                alert("Пожалуйста, введите корректные координаты конечной точки (долгота, широта).");
+                alert("Пожалуйста, введите корректные координаты конечной  точки (долгота, широта).");
                 return;
             }
             if (isNaN(numNodes) || numNodes < 2) {
                 alert("Пожалуйста, введите корректное количество узлов (не менее 2).");
                 return;
+            }
             }
 
             fetch('/orthodrome', {

@@ -116,7 +116,7 @@
             <button type="submit" id="postroit">Построить ортодромию</button>
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
             <button type="button" id="reset">Сбросить</button>
-            <button onclick="window.location.href='/elevation-map'" id="elevation">Перейти на карту для WKT</button>
+            <button onclick="disableAlerts(); buildRoute(); window.location.href='/elevation-map'" id="elevation">Перейти на карту для WKT</button>
             <button type="button" id="start-drawing">Начать/Закончить рисовать зону полета</button>
             <button type="button" id="build-restricted-area">Построить запретную зону</button>
         </div>
@@ -131,6 +131,19 @@
         var restrictedAreaPolygon;
         var drawingMode = false; // Режим рисования
         var points = []; // Массив для хранения выбранных точек
+
+        function disableAlerts() { //выключаю уведомление на кнопку
+            // Переопределяем функцию alert
+            window.alert = function() {};
+        }
+
+        function buildRoute() {
+            // Здесь ваш код, который может вызывать alert
+            alert("Это уведомление, которое не будет показано.");
+        }
+
+
+
 
         function init() {
             myMap = new ymaps.Map("map", {
@@ -240,7 +253,7 @@
 
         var routes = []; // Массив для хранения маршрутов
 
-function buildRoute() {
+function buildRoute() { // тута разбираемся с маркерами
     var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
     var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
     var numNodes = parseInt(document.getElementById('num_nodes').value);
@@ -261,7 +274,7 @@ function buildRoute() {
     // Удаляем только предыдущие маршруты
     removeRoutes();
 
-    fetch('/orthodrome', {
+    fetch('/orthodrome', { //связь с бекэнд
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -358,7 +371,7 @@ function removeRoutes() {
         }
 
 
-////////////////////////////зона запрета/////////////////////
+////////////////////////////зона запрета///////////////////// разработка 06.10.24
 
 
     // Передайте зону запрета вместе с данными

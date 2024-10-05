@@ -166,6 +166,7 @@
 
             document.getElementById('reset').addEventListener('click', function () {
                 resetMap();
+
             });
 
             document.getElementById('start-drawing').addEventListener('click', function () {
@@ -237,7 +238,9 @@
             }
         }
 
-        function buildRoute() {
+        var routes = []; // Массив для хранения маршрутов
+
+function buildRoute() {
     var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
     var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
     var numNodes = parseInt(document.getElementById('num_nodes').value);
@@ -255,6 +258,9 @@
         return;
     }
 
+    // Удаляем только предыдущие маршруты
+    removeRoutes();
+
     fetch('/orthodrome', {
         method: 'POST',
         headers: {
@@ -267,27 +273,46 @@
             orthodrome: isOrthodrome
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! статус: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
-        coords = data.coordinates.map(coord => [coord[1], coord[0]]);
+        if (!data.coordinates || !Array.isArray(data.coordinates)) {
+            throw new Error('Некорректный формат данных координат.');
+        }
 
-        myMap.geoObjects.removeAll(); // Очищаем предыдущие маршруты
+        const coords = data.coordinates.map(coord => [coord[1], coord[0]]);
 
-        // Используем polyline для построения линии
-        var line = new ymaps.Polyline(coords, {
+        // Создаем новый маршрут
+        const routeLine = new ymaps.Polyline(coords, {
             balloonContent: 'Прямая линия'
         }, {
             strokeColor: isOrthodrome ? 'rgb(155, 16, 17)' : 'rgb(0, 0, 255)',
             strokeWidth: 4
         });
 
-        myMap.geoObjects.add(line);
-        myMap.setBounds(line.getBounds(), { checkZoomRange: true });
+        myMap.geoObjects.add(routeLine); // Добавляем маршрут на карту
+        routes.push(routeLine); // Сохраняем маршрут в массив
 
-        //alert("Ортодромия построена.");
+        myMap.setBounds(routeLine.getBounds()); // Устанавливаем границы карты под маршрут
     })
-    .catch(error => console.error('Ошибка:', error));
+    .catch(error => {
+        console.error('Ошибка:', error);
+       // alert(`Ошибка: ${error.message}`);
+    });
 }
+
+// Функция для удаления маршрутов
+function removeRoutes() {
+    routes.forEach(route => {
+        myMap.geoObjects.remove(route); // Удаляем маршрут с карты
+    });
+    routes = []; // Очищаем массив маршрутов
+}
+
 
 
         function resetMap() {
@@ -331,6 +356,48 @@
                 alert("Для построения запретной зоны необходимо выбрать хотя бы три точки.");
             }
         }
+
+
+////////////////////////////зона запрета/////////////////////
+
+
+    // Передайте зону запрета вместе с данными
+    const prohibitionZone = [
+        [x1, y1],
+        [x2, y1],
+        [x2, y2],
+        [x1, y2],
+        [x1, y1] // Закройте полигон
+    ];
+
+    fetch('/orthodrome', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            start_point: [startLongitude, startLatitude],
+            end_point: [endLongitude, endLatitude],
+            num_nodes: numberOfNodes,
+            orthodrome: true,
+            prohibition_zone: prohibitionZone // Добавьте зону запрета
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert(data.error); // Показать ошибку
+            // Отобразите пересечение на карте, если есть
+            if (data.intersection) {
+                // Логика для отображения пересечения на карте
+            }
+        } else {
+            // Логика для отображения ортодромии на карте
+        }
+    })
+    .catch(error => console.error('Error:', error));
+
+
     </script>
 </body>
 </html>

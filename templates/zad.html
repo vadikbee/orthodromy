@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orthodrome Service</title>
+    <title>Ортодромия</title>
     <style>
         body {
             text-align: center;
@@ -28,16 +28,14 @@
             background-color: rgba(0, 0, 0, 0.4);
             padding: 10px 20px;
             border-radius: 10px;
-
         }
 
-        input { /* ввод*/
+        input {
             display: block;
-            margin: 10px 15;
+            margin: 10px auto;
             width: 100%;
             padding: 5px;
             text-align: center;
-            margin-top: 10px;
         }
 
         label {
@@ -48,17 +46,17 @@
         .buttons {
             display: flex;
             justify-content: space-between;
-            margin-top: 10px; /* Отступ между кнопками */
+            margin-top: 10px;
         }
 
-        button { // настройки обеих кнопок
+        button {
             width: auto;
             padding: 15px 20px;
             background-color: #4CAF50;
             color: white;
             border: none;
             cursor: pointer;
-            margin-left: 10px; /* Отступ слева */
+            margin-left: 10px;
             margin-top: 10px;
         }
 
@@ -66,15 +64,11 @@
             background-color: #45a049;
         }
 
-        #krivaya-text {
-            font-size: 20px;
-            color: black;
-            padding: 10px 20px;
-        }
+        #krivaya-text,
         #krivaya2-text {
             font-size: 20px;
             color: black;
-            padding: 30px 20px;
+            padding: 10px 20px;
         }
 
         #elevation {
@@ -84,24 +78,19 @@
             padding: 10px 20px;
             text-align: center;
             text-decoration: none;
-            display: block; /* Изменено на block для выравнивания */
+            display: block;
             font-size: 16px;
-            margin: 10px auto; /* Центрирование кнопок */
+            margin: 10px auto;
             cursor: pointer;
             border-radius: 5px;
             transition: background-color 0.3s;
+            position: absolute;
+            top: 50px;
+            left: 30px;
         }
 
-        #elevation {
-            position: absolute; /* Фиксированное положение */
-            top: 50px; /* Отступ сверху */
-            left: 30px; /* Отступ слева */
-
-        }
-        #elevation:hover, .submit-button:hover {
-            background-color: #333; /* Темнее при наведении */
-        }
-
+        #elevation:hover {
+            background-color: #333;
         }
     </style>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
@@ -128,11 +117,9 @@
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
             <button type="button" id="reset">Сбросить</button>
             <button onclick="window.location.href='/elevation-map'" id="elevation">Перейти на карту для WKT</button>
+            <button type="button" id="start-drawing">Начать/Закончить рисовать зону полета</button>
+            <button type="button" id="build-restricted-area">Построить запретную зону</button>
         </div>
-
-
-
-
     </form>
 
     <div id="map"></div>
@@ -141,6 +128,9 @@
         ymaps.ready(init);
         var myMap, isOrthodrome = true, coords;
         var startMarker, endMarker;
+        var restrictedAreaPolygon;
+        var drawingMode = false; // Режим рисования
+        var points = []; // Массив для хранения выбранных точек
 
         function init() {
             myMap = new ymaps.Map("map", {
@@ -148,20 +138,21 @@
                 zoom: 5
             });
 
-            // Обработчик клика на карту
             myMap.events.add('click', function (e) {
-                var coords = e.get('coords');
-                if (!startMarker) {
-                    addStartMarker(coords);
-                } else if (!endMarker) {
-                    addEndMarker(coords);
+                if (drawingMode) {
+                    var coords = e.get('coords');
+                    addPoint(coords);
                 } else {
-                    alert("Уже установлены обе точки. Сбросьте, чтобы установить новые.");
+                    var coords = e.get('coords');
+                    if (!startMarker) {
+                        addStartMarker(coords);
+                    } else if (!endMarker) {
+                        addEndMarker(coords);
+                    } else {
+                        alert("Уже установлены обе точки. Сбросьте, чтобы установить новые.");
+                    }
                 }
             });
-
-
-
 
             document.getElementById('form').addEventListener('submit', function (event) {
                 event.preventDefault();
@@ -176,15 +167,21 @@
             document.getElementById('reset').addEventListener('click', function () {
                 resetMap();
             });
+
+            document.getElementById('start-drawing').addEventListener('click', function () {
+                toggleDrawingMode();
+            });
+
+            document.getElementById('build-restricted-area').addEventListener('click', function () {
+                buildRestrictedArea();
+            });
         }
 
         function addStartMarker(coords) {
-            // Удаляем старый начальный маркер, если он есть
             if (startMarker) {
                 myMap.geoObjects.remove(startMarker);
             }
 
-            // Создаем новый маркер для начальной точки и добавляем его на карту
             startMarker = new ymaps.Placemark(coords, {
                 balloonContent: 'Начальная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
             }, {
@@ -197,12 +194,10 @@
         }
 
         function addEndMarker(coords) {
-            // Удаляем старый конечный маркер, если он есть
             if (endMarker) {
                 myMap.geoObjects.remove(endMarker);
             }
 
-            // Создаем новый маркер для конечной точки и добавляем его на карту
             endMarker = new ymaps.Placemark(coords, {
                 balloonContent: 'Конечная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
             }, {
@@ -214,63 +209,127 @@
             document.getElementById('end_point').value = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
         }
 
-        function buildRoute() {
-            var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
-            var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
-            var numNodes = parseInt(document.getElementById('num_nodes').value);
+        function addPoint(coords) {
+            points.push(coords); // Сохраняем координаты выбранной точки
 
-            if (event && event.target && event.target.id === 'elevation') {  // блокирую условия для кнопки elevation
-            if (startPoint.length !== 2 || isNaN(startPoint[0]) || isNaN(startPoint[1])) {
-                alert("Пожалуйста, введите корректные координаты начальной точки (долгота, широта).");
-                return;
-            }
-            if (endPoint.length !== 2 || isNaN(endPoint[0]) || isNaN(endPoint[1])) {
-                alert("Пожалуйста, введите корректные координаты конечной  точки (долгота, широта).");
-                return;
-            }
-            if (isNaN(numNodes) || numNodes < 2) {
-                alert("Пожалуйста, введите корректное количество узлов (не менее 2).");
-                return;
-            }
-            }
+            var pointMarker = new ymaps.Placemark(coords, {
+                balloonContent: 'Точка ' + points.length + ': ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
+            }, {
+                preset: 'islands#icon',
+                iconColor: '#FFFF00' // Цвет маркера
+            });
 
-            fetch('/orthodrome', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    start_point: startPoint,
-                    end_point: endPoint,
-                    num_nodes: numNodes,
-                    orthodrome: isOrthodrome
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                coords = data.coordinates.map(coord => [coord[1], coord[0]]);
-
-                myMap.geoObjects.removeAll();
-
-                var polyline = new ymaps.Polyline(coords, {}, {
-                    strokeWidth: 4,
-                    strokeColor: isOrthodrome ? "rgb(155, 16, 17)" : "rgb(0, 0, 255)"
-                });
-
-                myMap.geoObjects.add(polyline);
-                myMap.setBounds(polyline.getBounds(), { checkZoomRange: true });
-            })
-            .catch(error => console.error('Ошибка:', error));
+            myMap.geoObjects.add(pointMarker);
         }
+
+        function toggleDrawingMode() {
+            drawingMode = !drawingMode; // Переключаем режим рисования
+            points = []; // Очищаем массив точек
+            if (drawingMode) {
+                //alert("Режим рисования включен. Нажмите на карту, чтобы выбрать точки.");
+            } else {
+               // alert("Режим рисования выключен.");
+                // Удаляем все точки с карты
+                myMap.geoObjects.removeAll();
+                // Восстанавливаем маркеры стартовой и конечной точки, если они были установлены
+                if (startMarker) myMap.geoObjects.add(startMarker);
+                if (endMarker) myMap.geoObjects.add(endMarker);
+            }
+        }
+
+        function buildRoute() {
+    var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
+    var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
+    var numNodes = parseInt(document.getElementById('num_nodes').value);
+
+    if (startPoint.length !== 2 || isNaN(startPoint[0]) || isNaN(startPoint[1])) {
+        alert("Пожалуйста, введите корректные координаты начальной точки (долгота, широта).");
+        return;
+    }
+    if (endPoint.length !== 2 || isNaN(endPoint[0]) || isNaN(endPoint[1])) {
+        alert("Пожалуйста, введите корректные координаты конечной точки (долгота, широта).");
+        return;
+    }
+    if (isNaN(numNodes) || numNodes < 2) {
+        alert("Пожалуйста, введите корректное количество узлов (не менее 2).");
+        return;
+    }
+
+    fetch('/orthodrome', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            start_point: startPoint,
+            end_point: endPoint,
+            num_nodes: numNodes,
+            orthodrome: isOrthodrome
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        coords = data.coordinates.map(coord => [coord[1], coord[0]]);
+
+        myMap.geoObjects.removeAll(); // Очищаем предыдущие маршруты
+
+        // Используем polyline для построения линии
+        var line = new ymaps.Polyline(coords, {
+            balloonContent: 'Прямая линия'
+        }, {
+            strokeColor: isOrthodrome ? 'rgb(155, 16, 17)' : 'rgb(0, 0, 255)',
+            strokeWidth: 4
+        });
+
+        myMap.geoObjects.add(line);
+        myMap.setBounds(line.getBounds(), { checkZoomRange: true });
+
+        //alert("Ортодромия построена.");
+    })
+    .catch(error => console.error('Ошибка:', error));
+}
+
 
         function resetMap() {
             myMap.geoObjects.removeAll();
             startMarker = null;
             endMarker = null;
+            points = [];
             document.getElementById('start_point').value = '';
             document.getElementById('end_point').value = '';
-            document.getElementById('num_nodes').value = '20';
-            isOrthodrome = true; // Сбрасываем кривая/прямая к кривой
+            document.getElementById('num_nodes').value = 20;
+            //alert("Карта сброшена.");
+        }
+
+        function toggleDrawingMode() {
+            drawingMode = !drawingMode; // Переключаем режим рисования
+            points = []; // Очищаем массив точек
+            if (drawingMode) {
+                //alert("Режим рисования включен. Нажмите на карту, чтобы выбрать точки.");
+            } else {
+                //alert("Режим рисования выключен.");
+                // Восстанавливаем маркеры стартовой и конечной точки, если они были установлены
+                if (startMarker) myMap.geoObjects.add(startMarker);
+            }   if (endMarker) myMap.geoObjects.add(endMarker);
+        }
+
+
+        function buildRestrictedArea() {
+            if (points.length > 2) {
+                // Создаем многоугольник
+                var restrictedAreaPolygon = new ymaps.Polygon([points], {
+                    balloonContent: 'Запретная зона'
+                }, {
+                    fillColor: 'rgba(0, 0, 255, 0.3)', // Синий цвет с прозрачностью
+                    strokeColor: '#0000FF',
+                    strokeWidth: 2
+                });
+
+                myMap.geoObjects.add(restrictedAreaPolygon);
+               // alert("Запретная зона построена.");
+            } else {
+                alert("Для построения запретной зоны необходимо выбрать хотя бы три точки.");
+            }
         }
     </script>
 </body>

@@ -124,146 +124,124 @@
 
     <div id="map"></div>
 
-    <script> //работа с картой
+    <script>
+// работа с картой
 
-        ymaps.ready(init); // Дожидаемся загрузки API Яндекс.Карт
-        var myMap, isOrthodrome = true, coords;
-        var startMarker, endMarker;
-        var restrictedAreaPolygon;
-        var drawingMode = false; // Режим рисования
-        var points = []; // Массив для хранения выбранных точек
-        var restrictedAreaCoords = [];  // Глобальная переменная для координат зоны запрета
-        var routes = []; // Массив для хранения маршрутов
-        var intersectionLine = null; // Глобальная переменная для линии пересечения
+ymaps.ready(init); // Дожидаемся загрузки API Яндекс.Карт
+var myMap, isOrthodrome = true, coords;
+var startMarker, endMarker;
+var restrictedAreas = []; // Массив для хранения зон запрета
+var drawingMode = false; // Режим рисования
+var points = []; // Массив для хранения выбранных точек
+var routes = []; // Массив для хранения маршрутов
+var intersectionLine = null; // Глобальная переменная для линии пересечения
 
-        function disableAlerts() { //выключаю уведомление на кнопку
-            // Переопределяем функцию alert
-            window.alert = function() {};
-        }
+function init() {
+    myMap = new ymaps.Map("map", {
+        center: [55.751244, 37.618423],
+        zoom: 5
+    });
 
-        function buildRoute() {
-            // Здесь ваш код, который может вызывать alert
-            alert("Это уведомление, которое не будет показано.");
-        }
-
-
-        function init() {
-            myMap = new ymaps.Map("map", {
-                center: [55.751244, 37.618423],
-                zoom: 5
-            });
-
-            myMap.events.add('click', function (e) {
-                if (drawingMode) {
-                    var coords = e.get('coords');
-                    addPoint(coords);
-                } else {
-                    var coords = e.get('coords');
-                    if (!startMarker) {
-                        addStartMarker(coords);
-                    } else if (!endMarker) {
-                        addEndMarker(coords);
-                    } else {
-                        alert("Уже установлены обе точки. Сбросьте, чтобы установить новые.");
-                    }
-                }
-            });
-
-            document.getElementById('form').addEventListener('submit', function (event) {
-                event.preventDefault();
-                buildRoute();
-            });
-
-            document.getElementById('toggle-curve').addEventListener('click', function () {
-                isOrthodrome = !isOrthodrome;
-
-                buildRoute();
-            });
-
-            document.getElementById('reset').addEventListener('click', function () {
-                resetMap();
-
-            });
-
-            document.getElementById('start-drawing').addEventListener('click', function () {
-                toggleDrawingMode();
-            });
-
-            document.getElementById('build-restricted-area').addEventListener('click', function () {
-                buildRestrictedArea();
-            });
-        }
-
-        function addStartMarker(coords) {
-            if (startMarker) {
-                myMap.geoObjects.remove(startMarker);
-            }
-
-            startMarker = new ymaps.Placemark(coords, {
-                balloonContent: 'Начальная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
-            }, {
-                preset: 'islands#icon',
-                iconColor: '#0095b6'
-            });
-
-            myMap.geoObjects.add(startMarker);
-            document.getElementById('start_point').value = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
-        }
-
-        function addEndMarker(coords) {
-            if (endMarker) {
-                myMap.geoObjects.remove(endMarker);
-            }
-
-            endMarker = new ymaps.Placemark(coords, {
-                balloonContent: 'Конечная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
-            }, {
-                preset: 'islands#icon',
-                iconColor: '#ff0000'
-            });
-
-            myMap.geoObjects.add(endMarker);
-            document.getElementById('end_point').value = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
-        }
-
-        function addPoint(coords) {
-            points.push(coords); // Сохраняем координаты выбранной точки
-
-            var pointMarker = new ymaps.Placemark(coords, {
-                balloonContent: 'Точка ' + points.length + ': ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
-            }, {
-                preset: 'islands#icon',
-                iconColor: '#FFFF00' // Цвет маркера
-            });
-
-            myMap.geoObjects.add(pointMarker);
-        }
-
-        function toggleDrawingMode() {
-            drawingMode = !drawingMode; // Переключаем режим рисования
-            points = []; // Очищаем массив точек
-            if (drawingMode) {
-                //alert("Режим рисования включен. Нажмите на карту, чтобы выбрать точки.");
+    myMap.events.add('click', function (e) {
+        if (drawingMode) {
+            var coords = e.get('coords');
+            addPoint(coords);
+        } else {
+            var coords = e.get('coords');
+            if (!startMarker) {
+                addStartMarker(coords);
+            } else if (!endMarker) {
+                addEndMarker(coords);
             } else {
-               // alert("Режим рисования выключен.");
-                // Удаляем все точки с карты
-                myMap.geoObjects.removeAll();
-                // Восстанавливаем маркеры стартовой и конечной точки, если они были установлены
-                if (startMarker) myMap.geoObjects.add(startMarker);
-                if (endMarker) myMap.geoObjects.add(endMarker);
+                alert("Уже установлены обе точки. Сбросьте, чтобы установить новые.");
             }
         }
+    });
 
-        var routes = []; // Массив для хранения маршрутов
+    document.getElementById('form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        buildRoute();
+    });
 
+    document.getElementById('toggle-curve').addEventListener('click', function () {
+        isOrthodrome = !isOrthodrome;
+        buildRoute();
+    });
 
-    var restrictedAreaCoords = [];  // Глобальная переменная для хранения координат зоны запрета
-var restrictedAreaPolygon; // Глобальная переменная для полигона
+    document.getElementById('reset').addEventListener('click', function () {
+        resetMap();
+    });
+
+    document.getElementById('start-drawing').addEventListener('click', function () {
+        toggleDrawingMode();
+    });
+
+    document.getElementById('build-restricted-area').addEventListener('click', function () {
+        buildRestrictedArea();
+    });
+}
+
+function addStartMarker(coords) {
+    if (startMarker) {
+        myMap.geoObjects.remove(startMarker);
+    }
+
+    startMarker = new ymaps.Placemark(coords, {
+        balloonContent: 'Начальная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
+    }, {
+        preset: 'islands#icon',
+        iconColor: '#0095b6'
+    });
+
+    myMap.geoObjects.add(startMarker);
+    document.getElementById('start_point').value = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
+}
+
+function addEndMarker(coords) {
+    if (endMarker) {
+        myMap.geoObjects.remove(endMarker);
+    }
+
+    endMarker = new ymaps.Placemark(coords, {
+        balloonContent: 'Конечная точка: ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
+    }, {
+        preset: 'islands#icon',
+        iconColor: '#ff0000'
+    });
+
+    myMap.geoObjects.add(endMarker);
+    document.getElementById('end_point').value = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
+}
+
+function addPoint(coords) {
+    points.push(coords); // Сохраняем координаты выбранной точки
+
+    var pointMarker = new ymaps.Placemark(coords, {
+        balloonContent: 'Точка ' + points.length + ': ' + coords[1].toFixed(6) + ', ' + coords[0].toFixed(6)
+    }, {
+        preset: 'islands#icon',
+        iconColor: '#FFFF00' // Цвет маркера
+    });
+
+    myMap.geoObjects.add(pointMarker);
+}
+
+function toggleDrawingMode() {
+    drawingMode = !drawingMode; // Переключаем режим рисования
+    points = []; // Очищаем массив точек
+    if (!drawingMode) {
+        // Удаляем только точки, добавленные во время рисования
+       // myMap.geoObjects.removeAll();
+        // Восстанавливаем маркеры стартовой и конечной точки, если они были установлены
+        if (startMarker) myMap.geoObjects.add(startMarker);
+        if (endMarker) myMap.geoObjects.add(endMarker);
+    }
+}
 
 function buildRestrictedArea() {
     if (points.length > 2) {
         // Создаем многоугольник
-        restrictedAreaPolygon = new ymaps.Polygon([points], {
+        var restrictedAreaPolygon = new ymaps.Polygon([points], {
             balloonContent: 'Запретная зона'
         }, {
             fillColor: 'rgba(0, 0, 255, 0.3)', // Синий цвет с прозрачностью
@@ -273,21 +251,16 @@ function buildRestrictedArea() {
 
         myMap.geoObjects.add(restrictedAreaPolygon);
 
-        // Сохраняем координаты зоны запрета
-        restrictedAreaCoords = restrictedAreaPolygon.geometry.getCoordinates()[0];  // Берем первую область
-
-        // alert("Запретная зона построена.");
+        // Сохраняем полигон в массив
+        restrictedAreas.push(restrictedAreaPolygon);
     } else {
         alert("Для построения запретной зоны необходимо выбрать хотя бы три точки.");
     }
+    points = []; // Очищаем массив точек после создания зоны
 }
-        console.log(restrictedAreaCoords);  // Проверьте, что массив координат заполнен
 
-
-
-    // Функция построения ортодромии и проверки пересечения с зоной запрета
-
-    function buildRoute() {
+// Функция построения ортодромии и проверки пересечения с зонами запрета
+function buildRoute() {
     var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
     var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
     var numNodes = parseInt(document.getElementById('num_nodes').value);
@@ -308,8 +281,6 @@ function buildRestrictedArea() {
     // Удаляем только предыдущие маршруты
     removeRoutes();
 
-
-
     fetch('/orthodrome', {  // связь с бэкендом
         method: 'POST',
         headers: {
@@ -320,7 +291,7 @@ function buildRestrictedArea() {
             end_point: endPoint,
             num_nodes: numNodes,
             orthodrome: isOrthodrome,
-            restricted_area: restrictedAreaCoords // Передаем координаты зоны запрета
+            restricted_areas: restrictedAreas.map(area => area.geometry.getCoordinates()[0]) // Передаем координаты всех зон запрета
         })
     })
     .then(response => {
@@ -348,11 +319,10 @@ function buildRestrictedArea() {
         routes.push(routeLine); // Сохраняем маршрут в массив
 
         // Устанавливаем границы карты под маршрут
-        myMap.setBounds(routeLine.geometry.getBounds()); // Исправлено на geometry.getBounds()
+        myMap.setBounds(routeLine.geometry.getBounds());
 
-
-        // Проверка пересечения маршрута с зоной запрета
-        checkIntersection(coords);
+        // Проверка пересечения маршрута с зонами запрета
+        checkIntersections(coords);
     })
     .catch(error => {
         console.error('Ошибка:', error);
@@ -360,57 +330,32 @@ function buildRestrictedArea() {
     });
 }
 
-// Функция проверки пересечения линии с зоной запрета
-function checkIntersection(routeCoords) {
-    if (!restrictedAreaPolygon) {
-        console.log("Зона запрета не построена.");
-        return;
-    }
+// Функция проверки пересечения линии с зонами запрета
+function checkIntersections(routeCoords) {
+    let intersectionPoints = [];
 
-    let isIntersecting = false;
-
-    // Проверяем каждую точку маршрута на нахождение внутри полигона
-    routeCoords.forEach(point => {
-        if (restrictedAreaPolygon.geometry.contains(point)) {
-            isIntersecting = true;
-        }
-    });
-
-    if (isIntersecting) {
-        alert("Вы пересекли зону запрета!");
-    } else {
-        console.log("Пересечений с зоной запрета нет.");
-    }
-}
-
-
-    // Функция проверки пересечения линии с зоной запрета %%%%%%%%%%%%%%%%%
-    // + отображение пересечения белым цветом
-    function checkIntersection(routeCoords) {
-        if (!restrictedAreaPolygon) {
-            console.log("Зона запрета не построена.");
-            return;
-        }
-
-        let intersectionPoints = [];
+    // Проверяем каждую зону запрета
+    restrictedAreas.forEach(area => {
+        const polygon = area.geometry;
 
         // Проверяем каждую точку маршрута на нахождение внутри полигона
         routeCoords.forEach(point => {
-            if (restrictedAreaPolygon.geometry.contains(point)) {
+            if (polygon.contains(point)) {
                 intersectionPoints.push(point); // Сохраняем точки пересечения
             }
         });
+    });
 
-        if (intersectionPoints.length > 0) {
-            alert("Вы пересекли зону запрета!");
-            highlightIntersections(intersectionPoints); // Вызываем функцию для выделения пересечений
-        } else {
-            console.log("Пересечений с зоной запрета нет.");
-        }
+    if (intersectionPoints.length > 0) {
+        alert("Вы пересекли одну или несколько зон запрета!");
+        highlightIntersections(intersectionPoints); // Вызываем функцию для выделения пересечений
+    } else {
+        console.log("Пересечений с зонами запрета нет.");
     }
+}
 
-    // Функция для выделения пересечения
-    function highlightIntersections(intersectionPoints) {
+// Функция для выделения пересечения
+function highlightIntersections(intersectionPoints) {
     // Удаляем предыдущую линию пересечения, если она существует
     if (intersectionLine) {
         myMap.geoObjects.remove(intersectionLine);
@@ -418,63 +363,30 @@ function checkIntersection(routeCoords) {
 
     // Создаем новую линию пересечения
     intersectionLine = new ymaps.Polyline(intersectionPoints, {
-        balloonContent: 'Пересечение с зоной запрета'
+        balloonContent: 'Пересечение с запретной зоной'
     }, {
-        strokeColor: '#FFFFFF', // Белый цвет
-        strokeWidth: 4
+        strokeColor: '#FFFFFF',
+        strokeWidth: 5,
+        strokeStyle: 'dash'
     });
 
-    // Добавляем линию пересечения на карту
-    myMap.geoObjects.add(intersectionLine);
+    myMap.geoObjects.add(intersectionLine); // Добавляем линию на карту
 }
 
-// Очистка линии пересечения при нажатии на любую кнопку
-document.querySelectorAll('.button').forEach(button => {
-    button.addEventListener('click', function () {
-        if (intersectionLine) {
-            myMap.geoObjects.remove(intersectionLine); // Удаляем линию пересечения
-            intersectionLine = null; // Сбрасываем переменную
-        }
-        // Дополнительная логика для кнопки
-    });
-});
-
-
-
-
-// Функция для удаления маршрутов
 function removeRoutes() {
-    routes.forEach(route => {
-        myMap.geoObjects.remove(route); // Удаляем маршрут с карты
-    });
+    routes.forEach(route => myMap.geoObjects.remove(route)); // Удаляем все маршруты с карты
     routes = []; // Очищаем массив маршрутов
 }
 
+function resetMap() {
+    myMap.geoObjects.removeAll(); // Очищаем карту
+    startMarker = endMarker = null; // Удаляем маркеры
+    points = []; // Очищаем массив точек
+    restrictedAreas = []; // Очищаем массив запретных зон
+    intersectionLine = null; // Очищаем линию пересечения
+}
+</script>
 
 
-        function resetMap() {
-            myMap.geoObjects.removeAll();
-            startMarker = null;
-            endMarker = null;
-            points = [];
-            document.getElementById('start_point').value = '';
-            document.getElementById('end_point').value = '';
-            document.getElementById('num_nodes').value = 20;
-            //alert("Карта сброшена.");
-        }
-
-        function toggleDrawingMode() {
-            drawingMode = !drawingMode; // Переключаем режим рисования
-            points = []; // Очищаем массив точек
-            if (drawingMode) {
-                //alert("Режим рисования включен. Нажмите на карту, чтобы выбрать точки.");
-            } else {
-                //alert("Режим рисования выключен.");
-                // Восстанавливаем маркеры стартовой и конечной точки, если они были установлены
-                if (startMarker) myMap.geoObjects.add(startMarker);
-            }   if (endMarker) myMap.geoObjects.add(endMarker);
-        }
-
-    </script>
 </body>
 </html>

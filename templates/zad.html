@@ -258,33 +258,6 @@
 
 
     var restrictedAreaCoords = [];  // Глобальная переменная для хранения координат зоны запрета
-    var restrictedAreaPolygon; // Глобальная переменная для полигона
-
-    function buildRestrictedArea() {
-        if (points.length > 2) {
-            // Создаем многоугольник
-            restrictedAreaPolygon = new ymaps.Polygon([points], {
-                balloonContent: 'Запретная зона'
-            }, {
-                fillColor: 'rgba(0, 0, 255, 0.3)', // Синий цвет с прозрачностью
-                strokeColor: '#0000FF',
-                strokeWidth: 2
-            });
-
-            myMap.geoObjects.add(restrictedAreaPolygon);
-
-            // Сохраняем координаты зоны запрета
-            restrictedAreaCoords = restrictedAreaPolygon.geometry.getCoordinates()[0];  // Берем первую область
-
-            // alert("Запретная зона построена.");
-        } else {
-            alert("Для построения запретной зоны необходимо выбрать хотя бы три точки.");
-        }
-    }
-
-
-
-    var restrictedAreaCoords = [];  // Глобальная переменная для хранения координат зоны запрета
 var restrictedAreaPolygon; // Глобальная переменная для полигона
 
 function buildRestrictedArea() {

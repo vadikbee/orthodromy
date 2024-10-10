@@ -124,13 +124,16 @@
 
     <div id="map"></div>
 
-    <script>
-        ymaps.ready(init);
+    <script> //работа с картой
+
+        ymaps.ready(init); // Дожидаемся загрузки API Яндекс.Карт
         var myMap, isOrthodrome = true, coords;
         var startMarker, endMarker;
         var restrictedAreaPolygon;
         var drawingMode = false; // Режим рисования
         var points = []; // Массив для хранения выбранных точек
+        var restrictedAreaCoords = [];  // Глобальная переменная для координат зоны запрета
+
 
         function disableAlerts() { //выключаю уведомление на кнопку
             // Переопределяем функцию alert
@@ -253,7 +256,63 @@
 
         var routes = []; // Массив для хранения маршрутов
 
-function buildRoute() { // тута разбираемся с маркерами
+
+    var restrictedAreaCoords = [];  // Глобальная переменная для хранения координат зоны запрета
+    var restrictedAreaPolygon; // Глобальная переменная для полигона
+
+    function buildRestrictedArea() {
+        if (points.length > 2) {
+            // Создаем многоугольник
+            restrictedAreaPolygon = new ymaps.Polygon([points], {
+                balloonContent: 'Запретная зона'
+            }, {
+                fillColor: 'rgba(0, 0, 255, 0.3)', // Синий цвет с прозрачностью
+                strokeColor: '#0000FF',
+                strokeWidth: 2
+            });
+
+            myMap.geoObjects.add(restrictedAreaPolygon);
+
+            // Сохраняем координаты зоны запрета
+            restrictedAreaCoords = restrictedAreaPolygon.geometry.getCoordinates()[0];  // Берем первую область
+
+            // alert("Запретная зона построена.");
+        } else {
+            alert("Для построения запретной зоны необходимо выбрать хотя бы три точки.");
+        }
+    }
+
+
+
+    var restrictedAreaCoords = [];  // Глобальная переменная для хранения координат зоны запрета
+var restrictedAreaPolygon; // Глобальная переменная для полигона
+
+function buildRestrictedArea() {
+    if (points.length > 2) {
+        // Создаем многоугольник
+        restrictedAreaPolygon = new ymaps.Polygon([points], {
+            balloonContent: 'Запретная зона'
+        }, {
+            fillColor: 'rgba(0, 0, 255, 0.3)', // Синий цвет с прозрачностью
+            strokeColor: '#0000FF',
+            strokeWidth: 2
+        });
+
+        myMap.geoObjects.add(restrictedAreaPolygon);
+
+        // Сохраняем координаты зоны запрета
+        restrictedAreaCoords = restrictedAreaPolygon.geometry.getCoordinates()[0];  // Берем первую область
+
+        // alert("Запретная зона построена.");
+    } else {
+        alert("Для построения запретной зоны необходимо выбрать хотя бы три точки.");
+    }
+}
+        console.log(restrictedAreaCoords);  // Проверьте, что массив координат заполнен
+
+    // Функция построения ортодромии и проверки пересечения с зоной запрета
+
+    function buildRoute() {
     var startPoint = document.getElementById('start_point').value.split(',').map(Number).reverse();
     var endPoint = document.getElementById('end_point').value.split(',').map(Number).reverse();
     var numNodes = parseInt(document.getElementById('num_nodes').value);
@@ -274,7 +333,7 @@ function buildRoute() { // тута разбираемся с маркерами
     // Удаляем только предыдущие маршруты
     removeRoutes();
 
-    fetch('/orthodrome', { //связь с бекэнд
+    fetch('/orthodrome', {  // связь с бэкендом
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -283,7 +342,8 @@ function buildRoute() { // тута разбираемся с маркерами
             start_point: startPoint,
             end_point: endPoint,
             num_nodes: numNodes,
-            orthodrome: isOrthodrome
+            orthodrome: isOrthodrome,
+            restricted_area: restrictedAreaCoords // Передаем координаты зоны запрета
         })
     })
     .then(response => {
@@ -310,13 +370,67 @@ function buildRoute() { // тута разбираемся с маркерами
         myMap.geoObjects.add(routeLine); // Добавляем маршрут на карту
         routes.push(routeLine); // Сохраняем маршрут в массив
 
-        myMap.setBounds(routeLine.getBounds()); // Устанавливаем границы карты под маршрут
+        // Устанавливаем границы карты под маршрут
+        myMap.setBounds(routeLine.geometry.getBounds()); // Исправлено на geometry.getBounds()
+
+
+        // Проверка пересечения маршрута с зоной запрета
+        checkIntersection(coords);
     })
     .catch(error => {
         console.error('Ошибка:', error);
-       // alert(`Ошибка: ${error.message}`);
+        alert(`Ошибка: ${error.message}`);
     });
 }
+
+// Функция проверки пересечения линии с зоной запрета
+function checkIntersection(routeCoords) {
+    if (!restrictedAreaPolygon) {
+        console.log("Зона запрета не построена.");
+        return;
+    }
+
+    let isIntersecting = false;
+
+    // Проверяем каждую точку маршрута на нахождение внутри полигона
+    routeCoords.forEach(point => {
+        if (restrictedAreaPolygon.geometry.contains(point)) {
+            isIntersecting = true;
+        }
+    });
+
+    if (isIntersecting) {
+        alert("Вы пересекли зону запрета!");
+    } else {
+        console.log("Пересечений с зоной запрета нет.");
+    }
+}
+
+
+    // Функция проверки пересечения линии с зоной запрета
+    function checkIntersection(routeCoords) {
+        if (!restrictedAreaPolygon) {
+            console.log("Зона запрета не построена.");
+            return;
+        }
+
+        let isIntersecting = false;
+
+        // Проверяем каждую точку маршрута на нахождение внутри полигона
+        routeCoords.forEach(point => {
+            if (restrictedAreaPolygon.geometry.contains(point)) {
+                isIntersecting = true;
+            }
+        });
+
+        if (isIntersecting) {
+            alert("Вы пересекли зону запрета!");
+        } else {
+            console.log("Пересечений с зоной запрета нет.");
+        }
+    }
+
+
 
 // Функция для удаления маршрутов
 function removeRoutes() {
@@ -350,66 +464,6 @@ function removeRoutes() {
                 if (startMarker) myMap.geoObjects.add(startMarker);
             }   if (endMarker) myMap.geoObjects.add(endMarker);
         }
-
-
-        function buildRestrictedArea() {
-            if (points.length > 2) {
-                // Создаем многоугольник
-                var restrictedAreaPolygon = new ymaps.Polygon([points], {
-                    balloonContent: 'Запретная зона'
-                }, {
-                    fillColor: 'rgba(0, 0, 255, 0.3)', // Синий цвет с прозрачностью
-                    strokeColor: '#0000FF',
-                    strokeWidth: 2
-                });
-
-                myMap.geoObjects.add(restrictedAreaPolygon);
-               // alert("Запретная зона построена.");
-            } else {
-                alert("Для построения запретной зоны необходимо выбрать хотя бы три точки.");
-            }
-        }
-
-
-////////////////////////////зона запрета///////////////////// разработка 06.10.24
-
-
-    // Передайте зону запрета вместе с данными
-    const prohibitionZone = [
-        [x1, y1],
-        [x2, y1],
-        [x2, y2],
-        [x1, y2],
-        [x1, y1] // Закройте полигон
-    ];
-
-    fetch('/orthodrome', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            start_point: [startLongitude, startLatitude],
-            end_point: [endLongitude, endLatitude],
-            num_nodes: numberOfNodes,
-            orthodrome: true,
-            prohibition_zone: prohibitionZone // Добавьте зону запрета
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert(data.error); // Показать ошибку
-            // Отобразите пересечение на карте, если есть
-            if (data.intersection) {
-                // Логика для отображения пересечения на карте
-            }
-        } else {
-            // Логика для отображения ортодромии на карте
-        }
-    })
-    .catch(error => console.error('Error:', error));
-
 
     </script>
 </body>

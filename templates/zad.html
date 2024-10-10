@@ -133,7 +133,8 @@
         var drawingMode = false; // Режим рисования
         var points = []; // Массив для хранения выбранных точек
         var restrictedAreaCoords = [];  // Глобальная переменная для координат зоны запрета
-
+        var routes = []; // Массив для хранения маршрутов
+        var intersectionLine = null; // Глобальная переменная для линии пересечения
 
         function disableAlerts() { //выключаю уведомление на кнопку
             // Переопределяем функцию alert
@@ -144,8 +145,6 @@
             // Здесь ваш код, который может вызывать alert
             alert("Это уведомление, которое не будет показано.");
         }
-
-
 
 
         function init() {
@@ -177,6 +176,7 @@
 
             document.getElementById('toggle-curve').addEventListener('click', function () {
                 isOrthodrome = !isOrthodrome;
+
                 buildRoute();
             });
 
@@ -310,6 +310,8 @@ function buildRestrictedArea() {
 }
         console.log(restrictedAreaCoords);  // Проверьте, что массив координат заполнен
 
+
+
     // Функция построения ортодромии и проверки пересечения с зоной запрета
 
     function buildRoute() {
@@ -332,6 +334,8 @@ function buildRestrictedArea() {
 
     // Удаляем только предыдущие маршруты
     removeRoutes();
+
+
 
     fetch('/orthodrome', {  // связь с бэкендом
         method: 'POST',
@@ -407,28 +411,61 @@ function checkIntersection(routeCoords) {
 }
 
 
-    // Функция проверки пересечения линии с зоной запрета
+    // Функция проверки пересечения линии с зоной запрета %%%%%%%%%%%%%%%%%
+    // + отображение пересечения белым цветом
     function checkIntersection(routeCoords) {
         if (!restrictedAreaPolygon) {
             console.log("Зона запрета не построена.");
             return;
         }
 
-        let isIntersecting = false;
+        let intersectionPoints = [];
 
         // Проверяем каждую точку маршрута на нахождение внутри полигона
         routeCoords.forEach(point => {
             if (restrictedAreaPolygon.geometry.contains(point)) {
-                isIntersecting = true;
+                intersectionPoints.push(point); // Сохраняем точки пересечения
             }
         });
 
-        if (isIntersecting) {
+        if (intersectionPoints.length > 0) {
             alert("Вы пересекли зону запрета!");
+            highlightIntersections(intersectionPoints); // Вызываем функцию для выделения пересечений
         } else {
             console.log("Пересечений с зоной запрета нет.");
         }
     }
+
+    // Функция для выделения пересечения
+    function highlightIntersections(intersectionPoints) {
+    // Удаляем предыдущую линию пересечения, если она существует
+    if (intersectionLine) {
+        myMap.geoObjects.remove(intersectionLine);
+    }
+
+    // Создаем новую линию пересечения
+    intersectionLine = new ymaps.Polyline(intersectionPoints, {
+        balloonContent: 'Пересечение с зоной запрета'
+    }, {
+        strokeColor: '#FFFFFF', // Белый цвет
+        strokeWidth: 4
+    });
+
+    // Добавляем линию пересечения на карту
+    myMap.geoObjects.add(intersectionLine);
+}
+
+// Очистка линии пересечения при нажатии на любую кнопку
+document.querySelectorAll('.button').forEach(button => {
+    button.addEventListener('click', function () {
+        if (intersectionLine) {
+            myMap.geoObjects.remove(intersectionLine); // Удаляем линию пересечения
+            intersectionLine = null; // Сбрасываем переменную
+        }
+        // Дополнительная логика для кнопки
+    });
+});
+
 
 
 

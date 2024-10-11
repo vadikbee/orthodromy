@@ -60,9 +60,6 @@
             margin-top: 10px;
         }
 
-        button:hover {
-            background-color: #45a049;
-        }
 
         #krivaya-text,
         #krivaya2-text {
@@ -71,8 +68,9 @@
             padding: 10px 20px;
         }
 
-        #elevation {
-            background-color: black;
+         /* Стили для кнопки перехода на карту для WKT */
+        .back-button {
+           background-color: black;
             border: none;
             color: white;
             padding: 10px 20px;
@@ -89,9 +87,10 @@
             left: 30px;
         }
 
-        #elevation:hover {
+        .back-button:hover {
             background-color: #333;
         }
+
     </style>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
 </head>
@@ -116,7 +115,10 @@
             <button type="submit" id="postroit">Построить ортодромию</button>
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
             <button type="button" id="reset">Сбросить</button>
-            <button onclick="disableAlerts(); buildRoute(); window.location.href='/elevation-map'" id="elevation">Перейти на карту для WKT</button>
+
+
+            <button onclick="disableAlerts(); buildRoute(); window.location.href='/elevation-map'" class="back-button">Перейти на карту для WKT</button>
+
             <button type="button" id="start-drawing">Начать/Закончить рисовать зону полета</button>
             <button type="button" id="build-restricted-area">Построить запретную зону</button>
         </div>
@@ -126,7 +128,6 @@
 
     <script>
 // работа с картой
-
 ymaps.ready(init); // Дожидаемся загрузки API Яндекс.Карт
 var myMap, isOrthodrome = true, coords;
 var startMarker, endMarker;
@@ -136,18 +137,22 @@ var points = []; // Массив для хранения выбранных то
 var routes = []; // Массив для хранения маршрутов
 var intersectionLine = null; // Глобальная переменная для линии пересечения
 
-function init() {
+function disableAlerts() { //выключаю уведомление на кнопку
+            // Переопределяем функцию alert
+            window.alert = function() {};
+    }
+
+function init() { //должна быть всегда тут
     myMap = new ymaps.Map("map", {
-        center: [55.751244, 37.618423],
-        zoom: 5
+        center: [55.76, 37.64],
+        zoom: 10
     });
 
     myMap.events.add('click', function (e) {
+        var coords = e.get('coords');
         if (drawingMode) {
-            var coords = e.get('coords');
             addPoint(coords);
         } else {
-            var coords = e.get('coords');
             if (!startMarker) {
                 addStartMarker(coords);
             } else if (!endMarker) {
@@ -230,8 +235,6 @@ function toggleDrawingMode() {
     drawingMode = !drawingMode; // Переключаем режим рисования
     points = []; // Очищаем массив точек
     if (!drawingMode) {
-        // Удаляем только точки, добавленные во время рисования
-       // myMap.geoObjects.removeAll();
         // Восстанавливаем маркеры стартовой и конечной точки, если они были установлены
         if (startMarker) myMap.geoObjects.add(startMarker);
         if (endMarker) myMap.geoObjects.add(endMarker);
@@ -301,7 +304,8 @@ function buildRoute() {
         return response.json();
     })
     .then(data => {
-        if (!data.coordinates || !Array.isArray(data.coordinates)) {
+        // Проверка структуры данных
+        if (!data || !data.coordinates || !Array.isArray(data.coordinates)) {
             throw new Error('Некорректный формат данных координат.');
         }
 
@@ -321,6 +325,8 @@ function buildRoute() {
         // Устанавливаем границы карты под маршрут
         myMap.setBounds(routeLine.geometry.getBounds());
 
+
+
         // Проверка пересечения маршрута с зонами запрета
         checkIntersections(coords);
     })
@@ -332,60 +338,103 @@ function buildRoute() {
 
 // Функция проверки пересечения линии с зонами запрета
 function checkIntersections(routeCoords) {
-    let intersectionPoints = [];
+    let intersectionSegments = []; // Массив для хранения отрезков пересечения
 
-    // Проверяем каждую зону запрета
-    restrictedAreas.forEach(area => {
-        const polygon = area.geometry;
+    // Флаг для отслеживания, было ли выведено сообщение о пересечении
+let intersectionAlertShown = false;
 
-        // Проверяем каждую точку маршрута на нахождение внутри полигона
-        routeCoords.forEach(point => {
-            if (polygon.contains(point)) {
-                intersectionPoints.push(point); // Сохраняем точки пересечения
+// Проверяем каждую зону запрета
+restrictedAreas.forEach(area => {
+    const polygon = area.geometry;
+    const polygonCoordinates = polygon.getCoordinates()[0];
+
+    // Проверяем каждый сегмент маршрута
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+        const segment = [routeCoords[i], routeCoords[i + 1]];
+        if (isSegmentIntersectingPolygon(segment, polygonCoordinates)) {
+            intersectionSegments.push(segment);
+
+            // Выводим сообщение только один раз
+            if (!intersectionAlertShown) {
+                alert("Маршрут пересекает зону запрета!");
+                intersectionAlertShown = true; // Устанавливаем флаг, чтобы больше не выводить сообщение
             }
+        }
+    }
+});
+
+
+    if (intersectionSegments.length > 0) {
+        // Отображаем линию пересечения, если есть пересечения
+        if (intersectionLine) {
+            myMap.geoObjects.remove(intersectionLine); // Удаляем предыдущую линию
+        }
+        intersectionLine = new ymaps.Polyline(intersectionSegments.flat(), {
+            balloonContent: 'Пересечение с зоной запрета'
+        }, {
+            strokeColor: '#FFFFFF',
+            strokeWidth: 2
         });
-    });
 
-    if (intersectionPoints.length > 0) {
-        alert("Вы пересекли одну или несколько зон запрета!");
-        highlightIntersections(intersectionPoints); // Вызываем функцию для выделения пересечений
-    } else {
-        console.log("Пересечений с зонами запрета нет.");
+        myMap.geoObjects.add(intersectionLine); // Добавляем линию пересечения на карту
     }
 }
 
-// Функция для выделения пересечения
-function highlightIntersections(intersectionPoints) {
-    // Удаляем предыдущую линию пересечения, если она существует
-    if (intersectionLine) {
-        myMap.geoObjects.remove(intersectionLine);
+// Функция проверки пересечения отрезка с полигоном
+function isSegmentIntersectingPolygon(segment, polygon) {
+    for (let i = 0; i < polygon.length - 1; i++) {
+        const edge = [polygon[i], polygon[i + 1]];
+        if (segmentsIntersect(segment, edge)) {
+            return true; // Пересечение найдено
+        }
     }
-
-    // Создаем новую линию пересечения
-    intersectionLine = new ymaps.Polyline(intersectionPoints, {
-        balloonContent: 'Пересечение с запретной зоной'
-    }, {
-        strokeColor: '#FFFFFF',
-        strokeWidth: 5,
-        strokeStyle: 'dash'
-    });
-
-    myMap.geoObjects.add(intersectionLine); // Добавляем линию на карту
+    return false; // Пересечение не найдено
 }
 
+// Функция проверки пересечения двух отрезков
+function segmentsIntersect(seg1, seg2) {
+    const [p1, p2] = seg1;
+    const [q1, q2] = seg2;
+
+    // Векторные операции для проверки пересечения
+    const d1 = crossProduct(subtract(p2, p1), subtract(q1, p1));
+    const d2 = crossProduct(subtract(p2, p1), subtract(q2, p1));
+    const d3 = crossProduct(subtract(q2, q1), subtract(p1, q1));
+    const d4 = crossProduct(subtract(q2, q1), subtract(p2, q1));
+
+    return d1 * d2 < 0 && d3 * d4 < 0; // Проверка на различные стороны
+}
+
+// Функция вычисления векторного произведения
+function crossProduct(v1, v2) {
+    return v1[0] * v2[1] - v1[1] * v2[0];
+}
+
+// Функция вычитания векторов
+function subtract(v1, v2) {
+    return [v1[0] - v2[0], v1[1] - v2[1]];
+}
+
+// Функция удаления маршрутов с карты
 function removeRoutes() {
-    routes.forEach(route => myMap.geoObjects.remove(route)); // Удаляем все маршруты с карты
+    routes.forEach(route => {
+        myMap.geoObjects.remove(route);
+    });
     routes = []; // Очищаем массив маршрутов
 }
 
+// Функция сброса карты
 function resetMap() {
-    myMap.geoObjects.removeAll(); // Очищаем карту
-    startMarker = endMarker = null; // Удаляем маркеры
+    myMap.geoObjects.removeAll();
+    startMarker = null;
+    endMarker = null;
+    restrictedAreas = [];
+    routes = [];
+    intersectionLine = null;
     points = []; // Очищаем массив точек
-    restrictedAreas = []; // Очищаем массив запретных зон
-    intersectionLine = null; // Очищаем линию пересечения
 }
 </script>
+
 
 
 </body>

@@ -127,6 +127,7 @@
     <div id="map"></div>
 
     <script>
+
 // работа с картой
 ymaps.ready(init); // Дожидаемся загрузки API Яндекс.Карт
 var myMap, isOrthodrome = true, coords;
@@ -137,16 +138,13 @@ var points = []; // Массив для хранения выбранных то
 var routes = []; // Массив для хранения маршрутов
 var intersectionLine = null; // Глобальная переменная для линии пересечения
 
-function disableAlerts() { //выключаю уведомление на кнопку
-            // Переопределяем функцию alert
-            window.alert = function() {};
-    }
-
 function init() { //должна быть всегда тут
     myMap = new ymaps.Map("map", {
         center: [55.76, 37.64],
         zoom: 10
     });
+
+
 
     myMap.events.add('click', function (e) {
         var coords = e.get('coords');
@@ -170,6 +168,7 @@ function init() { //должна быть всегда тут
 
     document.getElementById('toggle-curve').addEventListener('click', function () {
         isOrthodrome = !isOrthodrome;
+        removeIntersectionLine(); // Очищаем линию пересечения при переключении
         buildRoute();
     });
 
@@ -184,6 +183,19 @@ function init() { //должна быть всегда тут
     document.getElementById('build-restricted-area').addEventListener('click', function () {
         buildRestrictedArea();
     });
+}
+
+function disableAlerts() { //выключаю уведомление на кнопку
+            // Переопределяем функцию alert
+            window.alert = function() {};
+    }
+
+// Функция для удаления линии пересечения
+function removeIntersectionLine() {
+    if (intersectionLine) {
+        myMap.geoObjects.remove(intersectionLine);
+        intersectionLine = null; // Очищаем переменную
+    }
 }
 
 function addStartMarker(coords) {
@@ -385,6 +397,7 @@ let intersectionAlertShown = false;
 
 // Функция проверки пересечения линии с зонами запрета
 // Проверка пересечений маршрута с зонами запрета
+
 function checkIntersections(coords) {
     let hasIntersection = false; // Флаг наличия пересечения
     const routeSegment = [coords[0], coords[coords.length - 1]]; // Сегмент маршрута
@@ -403,7 +416,7 @@ function checkIntersections(coords) {
 
             if (limitedIntersections.length > 0) {
                 // Добавляем линию пересечения на карту
-                const intersectionLine = new ymaps.Polyline(limitedIntersections, {
+                intersectionLine = new ymaps.Polyline(limitedIntersections, {
                     balloonContent: 'Пересечение с зоной запрета'
                 }, {
                     strokeColor: '#FF0000',

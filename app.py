@@ -5,21 +5,35 @@ import rasterio
 from rasterio.plot import show
 from rasterio.warp import transform
 import os
-
-
+from shapely.geometry import LineString, Polygon, MultiLineString
 
 app = Flask(__name__)
 
 # Инициализация геоида WGS84
 geod = Geod(ellps="WGS84")
 
-
-
 # Маршрут для отображения главной HTML-страницы
 @app.route('/', methods=['GET'])
 def index():
     return render_template("zad.html")
 
+# Функция для проверки пересечения маршрута с запрещенными зонами
+def check_intersections(route_coords, restricted_areas):
+    route_line = LineString(route_coords)  # Создаем линию маршрута
+    intersections = []  # Список для хранения точек пересечения
+
+    for area in restricted_areas:
+        buffered_area = area.buffer(0.000001)  # Добавляем буфер к полигону
+
+        # Проверка на пересечение с буфером
+        if route_line.intersects(buffered_area):
+            intersection = route_line.intersection(buffered_area)  # Получаем точки пересечения
+            if isinstance(intersection, (LineString, MultiLineString)):
+                intersections.append(intersection)  # Добавляем линию пересечения
+            elif not intersection.is_empty:
+                intersections.append([intersection.x, intersection.y])  # Добавляем точку пересечения
+
+    return intersections  # Возвращаем список линий пересечения
 
 # Маршрут для обработки POST-запроса и расчета ортодромии или прямой линии
 @app.route('/orthodrome', methods=['POST'])
@@ -28,15 +42,23 @@ def orthodrome():
 
     start_point = data.get('start_point')
     end_point = data.get('end_point')
-    num_nodes = data.get('num_nodes')
+    num_nodes = data.get('num_nodes', 1000)
     is_orthodrome = data.get('orthodrome', True)
+    restricted_areas = data.get('restricted_areas', [])  # Получаем зоны запрета
 
+    # Проверка входных данных
     if not (isinstance(start_point, list) and len(start_point) == 2):
         return jsonify({"error": "Invalid start_point"}), 400
     if not (isinstance(end_point, list) and len(end_point) == 2):
         return jsonify({"error": "Invalid end_point"}), 400
     if not isinstance(num_nodes, int) or num_nodes < 2:
         return jsonify({"error": "Invalid num_nodes"}), 400
+
+    # Преобразуем зоны запрета в объекты Polygon
+    try:
+        restricted_areas = [Polygon(area) for area in restricted_areas]
+    except Exception as e:
+        return jsonify({"error": f"Invalid restricted_areas: {str(e)}"}), 400
 
     lon1, lat1 = start_point
     lon2, lat2 = end_point
@@ -52,7 +74,27 @@ def orthodrome():
 
     coordinates = [(lon1, lat1)] + list(points) + [(lon2, lat2)]
 
+    # Проверка пересечения с запрещенными зонами
+    intersections = check_intersections(coordinates, restricted_areas)
+    if intersections:
+        # Преобразуем линии пересечения в координаты для ответа
+        intersection_coords = []
+        for line in intersections:
+            if isinstance(line, LineString):
+                intersection_coords.extend(list(line.coords))
+            elif isinstance(line, list):
+                intersection_coords.append(line)  # Добавляем точку пересечения
+
+        return jsonify({"error": "Маршрут пересекает запрещенную зону!", "intersections": intersection_coords}), 403
+
     return jsonify({"coordinates": coordinates})
+
+
+
+
+
+
+
 
 #########################2-я страница wkt ##########################################
 

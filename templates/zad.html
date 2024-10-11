@@ -170,6 +170,11 @@ function init() { //должна быть всегда тут
 
     document.getElementById('toggle-curve').addEventListener('click', function () {
         isOrthodrome = !isOrthodrome;
+        // Удалить линию пересечения, если она существует
+    if (intersectionLine) {
+        myMap.geoObjects.remove(intersectionLine);
+        intersectionLine = null; // Обнуляем переменную
+    }
         buildRoute();
     });
 
@@ -336,49 +341,111 @@ function buildRoute() {
     });
 }
 
-// Функция проверки пересечения линии с зонами запрета
-function checkIntersections(routeCoords) {
-    let intersectionSegments = []; // Массив для хранения отрезков пересечения
+// Функция проверки пересечения и возвращения точек пересечения сегмента с полигоном
+function getIntersectionPoints(segment, polygon) {
+    let intersectionPoints = [];
 
-    // Флаг для отслеживания, было ли выведено сообщение о пересечении
+    // Проверяем каждый край полигона
+    for (let i = 0; i < polygon.length - 1; i++) {
+        const edge = [polygon[i], polygon[i + 1]];
+        const intersection = findIntersection(segment, edge);
+
+        if (intersection) {
+            intersectionPoints.push(intersection);
+        }
+    }
+
+    return intersectionPoints;
+}
+
+// Функция нахождения точки пересечения двух отрезков
+function findIntersection(seg1, seg2) {
+    const [p1, p2] = seg1;
+    const [q1, q2] = seg2;
+
+    // Векторные операции для проверки пересечения
+    const denominator = (q2[1] - q1[1]) * (p2[0] - p1[0]) - (q2[0] - q1[0]) * (p2[1] - p1[1]);
+
+    if (denominator === 0) {
+        return null; // Отрезки параллельны
+    }
+
+    const ua = ((q2[0] - q1[0]) * (p1[1] - q1[1]) - (q2[1] - q1[1]) * (p1[0] - q1[0])) / denominator;
+    const ub = ((p2[0] - p1[0]) * (p1[1] - q1[1]) - (p2[1] - p1[1]) * (p1[0] - q1[0])) / denominator;
+
+    if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+        // Возвращаем точку пересечения
+        return [
+            p1[0] + ua * (p2[0] - p1[0]),
+            p1[1] + ua * (p2[1] - p1[1])
+        ];
+    }
+
+    return null; // Нет пересечения
+}
+
+// Функция проверки пересечения линии с зонами запрета
+// Объявляем переменную для отслеживания показа предупреждения
 let intersectionAlertShown = false;
 
-// Проверяем каждую зону запрета
-restrictedAreas.forEach(area => {
-    const polygon = area.geometry;
-    const polygonCoordinates = polygon.getCoordinates()[0];
+// Функция проверки пересечения линии с зонами запрета
+// Проверка пересечений маршрута с зонами запрета
+function checkIntersections(coords) {
+    let hasIntersection = false;
+    const routeSegment = [coords[0], coords[coords.length - 1]];
 
-    // Проверяем каждый сегмент маршрута
-    for (let i = 0; i < routeCoords.length - 1; i++) {
-        const segment = [routeCoords[i], routeCoords[i + 1]];
-        if (isSegmentIntersectingPolygon(segment, polygonCoordinates)) {
-            intersectionSegments.push(segment);
+    restrictedAreas.forEach(area => {
+        const areaCoords = area.geometry.getCoordinates()[0];
+        const intersections = getIntersectionPoints(routeSegment, areaCoords);
 
-            // Выводим сообщение только один раз
-            if (!intersectionAlertShown) {
-                alert("Маршрут пересекает зону запрета!");
-                intersectionAlertShown = true; // Устанавливаем флаг, чтобы больше не выводить сообщение
+        if (intersections.length > 0) {
+            hasIntersection = true;
+
+            const limitedIntersections = intersections.filter(point =>
+                isPointOnSegment(routeSegment[0], routeSegment[1], point)
+            );
+
+            if (limitedIntersections.length > 0) {
+                // Если уже есть линия пересечения, удаляем её
+                if (intersectionLine) {
+                    myMap.geoObjects.remove(intersectionLine);
+                }
+
+                // Создаем новую линию пересечения
+                intersectionLine = new ymaps.Polyline(limitedIntersections, {
+                    balloonContent: 'Пересечение с зоной запрета'
+                }, {
+                    strokeColor: '#FF0000',
+                    strokeWidth: 4,
+                    strokeStyle: 'dash'
+                });
+
+                myMap.geoObjects.add(intersectionLine);
             }
         }
-    }
-});
+    });
 
-
-    if (intersectionSegments.length > 0) {
-        // Отображаем линию пересечения, если есть пересечения
-        if (intersectionLine) {
-            myMap.geoObjects.remove(intersectionLine); // Удаляем предыдущую линию
-        }
-        intersectionLine = new ymaps.Polyline(intersectionSegments.flat(), {
-            balloonContent: 'Пересечение с зоной запрета'
-        }, {
-            strokeColor: '#FFFFFF',
-            strokeWidth: 2
-        });
-
-        myMap.geoObjects.add(intersectionLine); // Добавляем линию пересечения на карту
+    if (hasIntersection) {
+        alert('Маршрут пересекает одну или несколько зон запрета!');
     }
 }
+
+
+// Проверка, находится ли точка на отрезке
+function isPointOnSegment(p1, p2, point) {
+    const crossProduct = (point[1] - p1[1]) * (p2[0] - p1[0]) - (point[0] - p1[0]) * (p2[1] - p1[1]);
+    if (Math.abs(crossProduct) > 1e-10) return false; // Не лежит на прямой
+
+    const dotProduct = (point[0] - p1[0]) * (p2[0] - p1[0]) + (point[1] - p1[1]) * (p2[1] - p1[1]);
+    if (dotProduct < 0) return false; // За пределами отрезка
+
+    const squaredLength = (p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2;
+    return dotProduct <= squaredLength; // Находится ли точка на отрезке
+}
+
+
+
+
 
 // Функция проверки пересечения отрезка с полигоном
 function isSegmentIntersectingPolygon(segment, polygon) {
@@ -433,6 +500,109 @@ function resetMap() {
     intersectionLine = null;
     points = []; // Очищаем массив точек
 }
+
+        let routeCoords = []; // Массив для хранения координат маршрута
+
+// Предположим, вы используете события карты для сбора координат
+myMap.events.add('click', function (e) {
+    let coords = e.get('coords'); // Получаем координаты клика
+    routeCoords.push(coords); // Добавляем координаты в массив
+    // Добавляем точку на карту (или используйте другой метод для рисования маршрута)
+});
+
+// Вызывайте эту функцию, когда пользователь завершает рисование маршрута
+function finalizeRoute() {
+    sendRouteToBackend(routeCoords); // Отправляем координаты на бэкенд
+    // Можно также сбросить массив координат, если нужно
+    routeCoords = [];
+}
+
+        function sendRouteToBackend(routeCoords) {
+    fetch('/check_intersection', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ route: routeCoords }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.intersections.length > 0) {
+            displayIntersectionLines(data.intersections);
+            alert("Маршрут пересекает зону запрета!");
+        }
+    })
+    .catch((error) => {
+        console.error('Ошибка:', error);
+    });
+}
+
+function displayIntersectionLines(intersections) {
+    if (intersectionLine) {
+        myMap.geoObjects.remove(intersectionLine); // Удаляем предыдущую линию
+    }
+
+    // Преобразуем координаты пересечений в формат для отображения на карте
+    const intersectionSegments = intersections.flat().map(coords => {
+        return [coords[1], coords[0]]; // Обратите внимание на порядок [широта, долгота]
+    });
+
+    // Создаем линию пересечения
+    intersectionLine = new ymaps.Polyline(intersectionSegments, {
+        balloonContent: 'Пересечение с зоной запрета'
+    }, {
+        strokeColor: '#FF0000', // Красный цвет для выделения пересечений
+        strokeWidth: 3
+    });
+
+    myMap.geoObjects.add(intersectionLine); // Добавляем линию пересечения на карту
+}
+
+function drawIntersectionLine(coordinates) {
+    const intersectionLine = new L.polyline(coordinates.map(coord => [coord[1], coord[0]]), {
+        color: 'red', // Цвет линии пересечения
+        weight: 2,
+        dashArray: '5, 5' // Дашированный стиль линии
+    }).addTo(map);
+}
+
+function drawIntersectionPoint(coordinate) {
+    L.marker([coordinate[1], coordinate[0]], {icon: redMarker}).addTo(map);
+}
+
+// После выполнения запроса на создание ортодромии
+fetch('/orthodrome', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+        start_point: [lon1, lat1],
+        end_point: [lon2, lat2],
+        num_nodes: num_nodes,
+        restricted_areas: [[ [x1, y1], [x2, y2], [x3, y3], [x4, y4] ]]
+    })
+})
+.then(response => response.json())
+.then(data => {
+    if (data.error) {
+        console.error(data.error);
+        // Отобразите линии пересечения
+        if (data.intersections) {
+            data.intersections.forEach(intersection => {
+                // Предположим, вы используете API для рисования на карте
+                drawIntersection(intersection); // Функция для отрисовки пересечения
+            });
+        }
+    } else {
+        // Отрисовка маршрута
+        drawRoute(data.coordinates); // Ваша функция для рисования маршрута
+    }
+})
+.catch(error => console.error('Ошибка:', error));
+
+
+
 </script>
 
 

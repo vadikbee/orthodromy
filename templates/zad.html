@@ -170,11 +170,6 @@ function init() { //должна быть всегда тут
 
     document.getElementById('toggle-curve').addEventListener('click', function () {
         isOrthodrome = !isOrthodrome;
-        // Удалить линию пересечения, если она существует
-    if (intersectionLine) {
-        myMap.geoObjects.remove(intersectionLine);
-        intersectionLine = null; // Обнуляем переменную
-    }
         buildRoute();
     });
 
@@ -391,33 +386,29 @@ let intersectionAlertShown = false;
 // Функция проверки пересечения линии с зонами запрета
 // Проверка пересечений маршрута с зонами запрета
 function checkIntersections(coords) {
-    let hasIntersection = false;
-    const routeSegment = [coords[0], coords[coords.length - 1]];
+    let hasIntersection = false; // Флаг наличия пересечения
+    const routeSegment = [coords[0], coords[coords.length - 1]]; // Сегмент маршрута
 
     restrictedAreas.forEach(area => {
-        const areaCoords = area.geometry.getCoordinates()[0];
+        const areaCoords = area.geometry.getCoordinates()[0]; // Получаем координаты многоугольника
         const intersections = getIntersectionPoints(routeSegment, areaCoords);
 
         if (intersections.length > 0) {
             hasIntersection = true;
 
+            // Ограничиваем линию пересечения в пределах маршрута
             const limitedIntersections = intersections.filter(point =>
                 isPointOnSegment(routeSegment[0], routeSegment[1], point)
             );
 
             if (limitedIntersections.length > 0) {
-                // Если уже есть линия пересечения, удаляем её
-                if (intersectionLine) {
-                    myMap.geoObjects.remove(intersectionLine);
-                }
-
-                // Создаем новую линию пересечения
-                intersectionLine = new ymaps.Polyline(limitedIntersections, {
+                // Добавляем линию пересечения на карту
+                const intersectionLine = new ymaps.Polyline(limitedIntersections, {
                     balloonContent: 'Пересечение с зоной запрета'
                 }, {
                     strokeColor: '#FF0000',
                     strokeWidth: 4,
-                    strokeStyle: 'dash'
+                    strokeStyle: 'dash' // Даш-дэш
                 });
 
                 myMap.geoObjects.add(intersectionLine);
@@ -429,7 +420,6 @@ function checkIntersections(coords) {
         alert('Маршрут пересекает одну или несколько зон запрета!');
     }
 }
-
 
 // Проверка, находится ли точка на отрезке
 function isPointOnSegment(p1, p2, point) {

@@ -137,6 +137,7 @@ var drawingMode = false; // Режим рисования
 var points = []; // Массив для хранения выбранных точек
 var routes = []; // Массив для хранения маршрутов
 var intersectionLine = null; // Глобальная переменная для линии пересечения
+var intersectionLines = []; // Массив для хранения всех линий пересечения
 
 function init() { //должна быть всегда тут
     myMap = new ymaps.Map("map", {
@@ -167,10 +168,11 @@ function init() { //должна быть всегда тут
     });
 
     document.getElementById('toggle-curve').addEventListener('click', function () {
-        isOrthodrome = !isOrthodrome;
-        removeIntersectionLine(); // Очищаем линию пересечения при переключении
-        buildRoute();
-    });
+    isOrthodrome = !isOrthodrome;
+    removeIntersectionLines(); // Очищаем все линии пересечения при переключении
+    buildRoute();
+});
+
 
     document.getElementById('reset').addEventListener('click', function () {
         resetMap();
@@ -191,12 +193,13 @@ function disableAlerts() { //выключаю уведомление на кно
     }
 
 // Функция для удаления линии пересечения
-function removeIntersectionLine() {
-    if (intersectionLine) {
-        myMap.geoObjects.remove(intersectionLine);
-        intersectionLine = null; // Очищаем переменную
-    }
+function removeIntersectionLines() {
+    intersectionLines.forEach(line => {
+        myMap.geoObjects.remove(line);
+    });
+    intersectionLines = []; // Очищаем массив линий пересечения
 }
+
 
 function addStartMarker(coords) {
     if (startMarker) {
@@ -399,40 +402,41 @@ let intersectionAlertShown = false;
 // Проверка пересечений маршрута с зонами запрета
 
 function checkIntersections(coords) {
-    let hasIntersection = false; // Флаг наличия пересечения
-    const routeSegment = [coords[0], coords[coords.length - 1]]; // Сегмент маршрута
+    let hasIntersection = false;
+    const routeSegment = [coords[0], coords[coords.length - 1]];
 
     restrictedAreas.forEach(area => {
-        const areaCoords = area.geometry.getCoordinates()[0]; // Получаем координаты многоугольника
+        const areaCoords = area.geometry.getCoordinates()[0];
         const intersections = getIntersectionPoints(routeSegment, areaCoords);
 
         if (intersections.length > 0) {
             hasIntersection = true;
 
-            // Ограничиваем линию пересечения в пределах маршрута
             const limitedIntersections = intersections.filter(point =>
                 isPointOnSegment(routeSegment[0], routeSegment[1], point)
             );
 
             if (limitedIntersections.length > 0) {
-                // Добавляем линию пересечения на карту
-                intersectionLine = new ymaps.Polyline(limitedIntersections, {
+                // Создаем новую линию пересечения и добавляем её в массив
+                const newIntersectionLine = new ymaps.Polyline(limitedIntersections, {
                     balloonContent: 'Пересечение с зоной запрета'
                 }, {
                     strokeColor: '#FF0000',
                     strokeWidth: 4,
-                    strokeStyle: 'dash' // Даш-дэш
+                    strokeStyle: 'dash'
                 });
 
-                myMap.geoObjects.add(intersectionLine);
+                myMap.geoObjects.add(newIntersectionLine);
+                intersectionLines.push(newIntersectionLine); // Добавляем в массив линий пересечения
             }
         }
     });
 
     if (hasIntersection) {
-        alert('Маршрут пересекает одну или несколько зон запрета!');
+        alert('Маршрут пересекает зоны запрета!');
     }
 }
+
 
 // Проверка, находится ли точка на отрезке
 function isPointOnSegment(p1, p2, point) {

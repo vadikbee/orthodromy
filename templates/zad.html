@@ -353,6 +353,7 @@ function getIntersectionPoints(segment, polygon) {
 }
 
 // Функция нахождения точки пересечения двух отрезков
+// Функция нахождения точки пересечения двух отрезков
 function findIntersection(seg1, seg2) {
     const [p1, p2] = seg1;
     const [q1, q2] = seg2;
@@ -360,13 +361,14 @@ function findIntersection(seg1, seg2) {
     // Векторные операции для проверки пересечения
     const denominator = (q2[1] - q1[1]) * (p2[0] - p1[0]) - (q2[0] - q1[0]) * (p2[1] - p1[1]);
 
-    if (denominator === 0) {
+    if (Math.abs(denominator) < 1e-10) {
         return null; // Отрезки параллельны
     }
 
     const ua = ((q2[0] - q1[0]) * (p1[1] - q1[1]) - (q2[1] - q1[1]) * (p1[0] - q1[0])) / denominator;
     const ub = ((p2[0] - p1[0]) * (p1[1] - q1[1]) - (p2[1] - p1[1]) * (p1[0] - q1[0])) / denominator;
 
+    // Уточнение: проверяем, лежат ли точки пересечения внутри обоих отрезков
     if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
         // Возвращаем точку пересечения
         return [
@@ -429,13 +431,14 @@ function checkIntersections(coords) {
                     const intersectionLine = new ymaps.Polyline([startPoint, endPoint], {
                         balloonContent: 'Пересечение с зоной запрета'
                     }, {
-                        strokeColor: '#FFFFFF', // Красный цвет для выделения пересечения
+                        strokeColor: '#FFFFFF', // Белый цвет для выделения пересечения
                         strokeWidth: 4
                     });
 
                     myMap.geoObjects.add(intersectionLine);
                     intersectionLines.push(intersectionLine);
                 }
+
             }
         });
     }

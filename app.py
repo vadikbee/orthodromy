@@ -6,11 +6,14 @@ from shapely.geometry import LineString, MultiLineString, Polygon
 from flask_cors import CORS
 import logging
 
+# Создаем экземпляр Flask приложения
 app = Flask(__name__)
+# Разрешаем CORS для этого приложения
 CORS(app)
+# Включаем режим отладки
 app.debug = True
 
-# Инициализация геоида WGS84
+# Инициализация геоида WGS84 для вычисления ортодромии
 geod = Geod(ellps="WGS84")
 
 # Настройка логирования
@@ -19,17 +22,17 @@ logging.basicConfig(level=logging.INFO)
 # Маршрут для отображения главной HTML-страницы
 @app.route('/', methods=['GET'])
 def index():
-    return render_template("zad.html")
+    return render_template("zad.html")  # Отображаем HTML-шаблон
 
 # Функция для проверки пересечения маршрута с запрещенными зонами
 def check_intersections(route_coords, restricted_areas, buffer_size=0.00001):
-    route_line = LineString(route_coords)  # Создаем линию маршрута
+    route_line = LineString(route_coords)  # Создаем линию маршрута из координат
     intersections = []  # Список для хранения точек пересечения
 
     for i, area in enumerate(restricted_areas):
-        buffered_area = area.buffer(buffer_size)  # Добавляем буфер к полигону
+        buffered_area = area.buffer(buffer_size)  # Добавляем небольшой буфер к полигону
 
-        # Проверка на пересечение с буфером
+        # Проверка на пересечение маршрута с буфером зоны
         if route_line.intersects(buffered_area):
             intersection = route_line.intersection(buffered_area)  # Получаем точки пересечения
             logging.info(f"Intersection found with restricted area {i}: {intersection}")
@@ -37,22 +40,24 @@ def check_intersections(route_coords, restricted_areas, buffer_size=0.00001):
             # Обработка точек пересечения
             if isinstance(intersection, (LineString, Polygon)):
                 for point in intersection.coords:
-                    intersections.append([point[0], point[1]])  # Добавляем каждую точку
+                    intersections.append([point[0], point[1]])  # Добавляем каждую точку пересечения
             elif not intersection.is_empty:
                 intersections.append([intersection.x, intersection.y])  # Добавляем точку пересечения
 
-    return intersections  # Возвращаем список линий и точек пересечения
+    return intersections  # Возвращаем список точек пересечения
 
 # Маршрут для обработки POST-запроса и расчета ортодромии или прямой линии
 @app.route('/orthodrome', methods=['POST'])
 def orthodrome():
     try:
+        # Получаем данные из запроса
         data = request.json
         logging.debug(f"Received data: {data}")
 
+        # Извлекаем начальную и конечную точки, количество узлов и тип маршрута
         start_point = data.get('start_point')
         end_point = data.get('end_point')
-        num_nodes = data.get('num_nodes', 1000)
+        num_nodes = data.get('num_nodes', 1000)  # Устанавливаем значение по умолчанию
         is_orthodrome = data.get('orthodrome', True)
         restricted_areas = data.get('restricted_areas', [])  # Получаем зоны запрета
 
@@ -75,18 +80,19 @@ def orthodrome():
             logging.error(f"Error occurred while creating polygons: {str(e)}")
             return jsonify({"error": f"Invalid restricted_areas: {str(e)}"}), 400
 
-        lon1, lat1 = start_point
-        lon2, lat2 = end_point
+        lon1, lat1 = start_point  # Извлекаем координаты начальной точки
+        lon2, lat2 = end_point  # Извлекаем координаты конечной точки
 
         if is_orthodrome:
             # Ортодромический маршрут с большим количеством узлов
-            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 2000)  # Больше узлов для большей кривизны
+            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 2000)  # Больше узлов для большей точности кривая
         else:
             # Прямой маршрут
             lons = [lon1 + (lon2 - lon1) * i / (num_nodes - 1) for i in range(num_nodes)]
             lats = [lat1 + (lat2 - lat1) * i / (num_nodes - 1) for i in range(num_nodes)]
-            points = zip(lons, lats)
+            points = zip(lons, lats)  # Соединяем долготы и широты в пары
 
+        # Формируем полный список координат маршрута
         coordinates = [(lon1, lat1)] + list(points) + [(lon2, lat2)]
 
         # Проверка пересечения с запрещенными зонами
@@ -96,12 +102,13 @@ def orthodrome():
         return jsonify({
             "coordinates": coordinates,
             "warning": "Маршрут пересекает запрещенную зону!" if intersections else None,
-            "intersections": intersections
+            "intersections": intersections  # Возвращаем точки пересечения
         })
 
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
-        return jsonify({"error": "Internal Server Error"}), 500
+        return jsonify({"error": "Internal Server Error"}), 500  # Обработка ошибок
+
 
 
 

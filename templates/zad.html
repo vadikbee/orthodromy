@@ -193,6 +193,7 @@ function init() { //должна быть всегда тут
 
 document.getElementById('orta-zapret').addEventListener('click', function () {
     if (restrictedAreas.length > 0 && routes.length > 0) {
+    removeIntersectionLines();
         const routeCoords = routes[0].geometry.getCoordinates(); // Получаем координаты текущего маршрута
         buildRouteAvoidingZones(routeCoords, restrictedAreas); // Вызываем функцию для построения маршрута в обход зон
     } else {

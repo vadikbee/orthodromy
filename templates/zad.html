@@ -188,6 +188,183 @@ function init() { //должна быть всегда тут
     });
 }
 
+
+//////////////////////////логика построения обходного пути /////////////////////////////////////////////////
+
+document.getElementById('orta-zapret').addEventListener('click', function () {
+    if (restrictedAreas.length > 0 && routes.length > 0) {
+        const routeCoords = routes[0].geometry.getCoordinates(); // Получаем координаты текущего маршрута
+        buildRouteAvoidingZones(routeCoords, restrictedAreas); // Вызываем функцию для построения маршрута в обход зон
+    } else {
+        alert("Сначала постройте маршрут и задайте зоны запрета.");
+    }
+});
+
+// Функция для построения маршрута в обход зон запрета
+function buildRouteAvoidingZones(routeCoords, zones) {
+    const startPoint = routeCoords[0]; // Начальная точка
+    const endPoint = routeCoords[routeCoords.length - 1]; // Конечная точка
+
+    // Преобразуем зоны в формат для отправки на бэкенд
+    const restrictedAreas = zones.map(zone => zone.geometry.getCoordinates()[0]);
+
+    // Отправляем данные на бэкенд
+    fetch('/orthodrome_with_restrictions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            start_point: startPoint,
+            end_point: endPoint,
+            restricted_areas: restrictedAreas
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.coordinates) {
+            drawNewRoute(data.coordinates); // Рисуем новый маршрут
+        } else {
+            alert(data.message); // Отображаем сообщение об ошибке
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Произошла ошибка при построении маршрута.');
+    });
+}
+
+
+// Функция проверки пересечения сегмента с зоной
+function isSegmentIntersectingZone(segment, zoneCoords) {
+    const intersections = getIntersectionPoints(segment, zoneCoords);
+    return intersections.length > 0 || isSegmentInPolygon(segment, zoneCoords);
+}
+
+// Функция поиска обходного пути
+function findBypass(segment, zoneCoords) {
+    const bypass = [];
+    const [start, end] = segment;
+
+    // Получаем точки границы зоны
+    const zoneBoundary = zoneCoords.map(coord => [coord[0], coord[1]]); // Вытаскиваем координаты зоны
+
+    // Находим обходные точки с учетом безопасного расстояния
+    const safeDistance = 0.0005; // Пример безопасного расстояния в градусах
+    const bypassStart = findFartherPoint(start, zoneBoundary, safeDistance);
+    const bypassEnd = findFartherPoint(end, zoneBoundary, safeDistance);
+
+    // Если не удалось найти обходные точки, возвращаем null
+    if (!bypassStart || !bypassEnd) return null;
+
+    // Добавляем обходные точки с учетом их расположения относительно зоны
+    bypass.push(bypassStart);
+    bypass.push(bypassEnd);
+
+    // Прокладываем дополнительные точки между обходными точками, если необходимо
+    const intermediatePoints = generateIntermediatePoints(bypassStart, bypassEnd);
+    bypass.push(...intermediatePoints);
+
+    return bypass; // Возвращаем вычисленные обходные точки
+}
+
+// Функция для нахождения точки вдали от границы зоны
+function findFartherPoint(point, zoneBoundary, safeDistance) {
+    const closestPoint = findClosestPoint(point, zoneBoundary);
+    if (!closestPoint) return null;
+
+    const direction = getDirection(point, closestPoint);
+
+    // Убедитесь, что обходные точки находятся в безопасном расстоянии
+    return [
+        closestPoint[0] + direction[0] * safeDistance,
+        closestPoint[1] + direction[1] * safeDistance
+    ];
+}
+
+// Функция для генерации промежуточных точек
+function generateIntermediatePoints(start, end) {
+    const intermediatePoints = [];
+    const numPoints = 5; // Количество промежуточных точек
+
+    for (let i = 1; i <= numPoints; i++) {
+        const lat = start[1] + ((end[1] - start[1]) / (numPoints + 1)) * i;
+        const lon = start[0] + ((end[0] - start[0]) / (numPoints + 1)) * i;
+        intermediatePoints.push([lon, lat]);
+    }
+
+    return intermediatePoints;
+}
+
+// Функция для определения, с какой стороны находится точка относительно зоны
+function isLeftOfZone(point, zoneCoords) {
+    const left = zoneCoords[0];
+    const right = zoneCoords[zoneCoords.length - 1];
+
+    return (right[0] - left[0]) * (point[1] - left[1]) - (right[1] - left[1]) * (point[0] - left[0]) > 0;
+}
+
+// Функция для получения направления между двумя точками
+function getDirection(point1, point2) {
+    const deltaX = point2[0] - point1[0];
+    const deltaY = point2[1] - point1[1];
+    const length = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    return [deltaX / length, deltaY / length]; // Возвращаем нормализованный вектор направления
+}
+
+// Функция для рисования нового маршрута
+function drawNewRoute(routeCoords) {
+    // Удаляем предыдущие маршруты
+    removeRoutes();
+
+    // Рисуем новый маршрут
+    const newRouteLine = new ymaps.Polyline(routeCoords, {
+        balloonContent: 'Маршрут в обход зон запрета'
+    }, {
+        strokeColor: 'rgb(34, 139, 34)', // Зеленый цвет для нового маршрута
+        strokeWidth: 4
+    });
+
+    myMap.geoObjects.add(newRouteLine);
+    routes.push(newRouteLine);
+    myMap.setBounds(newRouteLine.geometry.getBounds());
+}
+
+// Функция для поиска ближайшей точки на границе зоны
+function findClosestPoint(point, zonePoints) {
+    let closestPoint = null;
+    let minDistance = Infinity;
+
+    zonePoints.forEach(zonePoint => {
+        const distance = calculateDistance(point, zonePoint);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestPoint = zonePoint;
+        }
+    });
+
+    return closestPoint;
+}
+
+// Функция для вычисления расстояния между двумя точками
+function calculateDistance(point1, point2) {
+    const R = 6371e3; // радиус Земли в метрах
+    const φ1 = point1[1] * Math.PI / 180; // широта в радианах
+    const φ2 = point2[1] * Math.PI / 180; // широта в радианах
+    const Δφ = (point2[1] - point1[1]) * Math.PI / 180; // разница в широте
+    const Δλ = (point2[0] - point1[0]) * Math.PI / 180; // разница в долготе
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // расстояние в метрах
+}
+
+// Убедитесь, что другие функции не были изменены
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 function disableAlerts() { //выключаю уведомление на кнопку
             // Переопределяем функцию alert
             window.alert = function() {};

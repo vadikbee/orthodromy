@@ -5,6 +5,9 @@ from rasterio.warp import transform
 from shapely.geometry import LineString, MultiLineString, Polygon
 from flask_cors import CORS
 import logging
+from heapq import heappop, heappush
+from shapely.ops import nearest_points
+from shapely.geometry import Point, LineString, Polygon
 
 # Создаем экземпляр Flask приложения
 app = Flask(__name__)
@@ -19,20 +22,27 @@ geod = Geod(ellps="WGS84")
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
+
 # Маршрут для отображения главной HTML-страницы
 @app.route('/', methods=['GET'])
 def index():
     return render_template("zad.html")  # Отображаем HTML-шаблон
 
+
 # Функция для проверки пересечения маршрута с запрещенными зонами
-def check_intersections(route_coords, restricted_areas, buffer_size=0.00001):
+def check_intersections(route_coords, restricted_areas):
     route_line = LineString(route_coords)  # Создаем линию маршрута из координат
     intersections = []  # Список для хранения точек пересечения
 
     for i, area in enumerate(restricted_areas):
-        buffered_area = area.buffer(buffer_size)  # Добавляем небольшой буфер к полигону
+        if area.geom_type == 'Polygon':
+            buffered_area = area  # Используем полигон напрямую
+        elif area.geom_type == 'Point':
+            buffered_area = area.buffer(area.radius)  # Используем радиус для круга
+        else:
+            continue  # Игнорируем неподдерживаемые типы
 
-        # Проверка на пересечение маршрута с буфером зоны
+        # Проверка на пересечение маршрута с зоной
         if route_line.intersects(buffered_area):
             intersection = route_line.intersection(buffered_area)  # Получаем точки пересечения
             logging.info(f"Intersection found with restricted area {i}: {intersection}")
@@ -46,7 +56,26 @@ def check_intersections(route_coords, restricted_areas, buffer_size=0.00001):
 
     return intersections  # Возвращаем список точек пересечения
 
-# Маршрут для обработки POST-запроса и расчета ортодромии или прямой линии
+
+# Функция для проверки расстояния от точки до запрещенных зон
+def is_too_close_to_restricted_area(point, restricted_areas, min_distance=0.01):
+    for area in restricted_areas:
+        if area.geom_type == 'Polygon':
+            if point.distance(area.exterior) < min_distance:
+                return True
+    return False
+
+
+# Функция для проверки, слишком ли близок маршрут к запрещенным зонам
+def is_route_too_close_to_restricted_areas(route, restricted_areas, threshold=0.001):  # threshold in degrees
+    route_line = LineString(route)  # Преобразуем маршрут в LineString
+    for area in restricted_areas:
+        if route_line.distance(area) < threshold:  # Проверяем расстояние до каждой запрещенной зоны
+            return True
+    return False
+
+
+# Обновленная функция маршрута для обработки POST-запроса и расчета ортодромии или прямой линии
 @app.route('/orthodrome', methods=['POST'])
 def orthodrome():
     try:
@@ -75,7 +104,7 @@ def orthodrome():
 
         # Преобразуем зоны запрета в объекты Polygon
         try:
-            restricted_areas = [Polygon(area) for area in restricted_areas]
+            restricted_areas = [Polygon(area) for area in restricted_areas if len(area) > 1]
         except Exception as e:
             logging.error(f"Error occurred while creating polygons: {str(e)}")
             return jsonify({"error": f"Invalid restricted_areas: {str(e)}"}), 400
@@ -83,9 +112,10 @@ def orthodrome():
         lon1, lat1 = start_point  # Извлекаем координаты начальной точки
         lon2, lat2 = end_point  # Извлекаем координаты конечной точки
 
+        # Создаем маршрут
         if is_orthodrome:
             # Ортодромический маршрут с большим количеством узлов
-            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 2000)  # Больше узлов для большей точности кривая
+            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 2000)  # Больше узлов для большей точности кривой
         else:
             # Прямой маршрут
             lons = [lon1 + (lon2 - lon1) * i / (num_nodes - 1) for i in range(num_nodes)]
@@ -95,14 +125,14 @@ def orthodrome():
         # Формируем полный список координат маршрута
         coordinates = [(lon1, lat1)] + list(points) + [(lon2, lat2)]
 
-        # Проверка пересечения с запрещенными зонами
-        intersections = check_intersections(coordinates, restricted_areas)
+        # Проверка близости к запрещенным зонам
+        if is_route_too_close_to_restricted_areas(coordinates, restricted_areas):
+            return jsonify({"error": "Маршрут слишком близок к запрещенной зоне!"}), 400
 
-        # Возвращаем координаты и предупреждение, если есть пересечение
+        # Возвращаем координаты
         return jsonify({
             "coordinates": coordinates,
-            "warning": "Маршрут пересекает запрещенную зону!" if intersections else None,
-            "intersections": intersections  # Возвращаем точки пересечения
+            "warning": None  # Нет предупреждений
         })
 
     except Exception as e:
@@ -110,14 +140,139 @@ def orthodrome():
         return jsonify({"error": "Internal Server Error"}), 500  # Обработка ошибок
 
 
+################################################################################
 
 
+# Функция для нахождения кратчайшего пути с учетом нескольких зон запрета
+from shapely.geometry import Point, LineString, Polygon
+import logging
+import math
 
 
+def find_shortest_path_with_restrictions(start_point, end_point, restricted_areas):
+    path = [start_point]
+    current_point = Point(start_point)
+    max_iterations = 100  # Ограничение на количество итераций
+    iteration_count = 0
+
+    while iteration_count < max_iterations:
+        iteration_count += 1
+        # Создаем линию маршрута от текущей точки до конечной
+        direct_path = LineString([current_point, end_point])
+
+        # Проверяем, пересекает ли маршрут какие-либо запретные зоны
+        intersects = any(direct_path.intersects(area) for area in restricted_areas)
+
+        if not intersects:
+            # Если маршрут не пересекает запретные зоны, добавляем конечную точку и выходим из цикла
+            path.append(end_point)
+            return path
+
+        logging.info("Route intersects with restricted area")
+
+        # Если есть пересечение, обходим зоны
+        for area in restricted_areas:
+            if direct_path.intersects(area):
+                # Находим точки пересечения
+                intersection = direct_path.intersection(area)
+
+                if intersection.is_empty:
+                    continue
+
+                # Получаем все точки пересечения
+                intersection_points = list(intersection.coords)
+
+                # Обрабатываем каждую точку пересечения
+                for inter_point in intersection_points:
+                    # Проверяем, является ли зона многоугольником
+                    if area.geom_type == 'Polygon':
+                        area_boundary = area.exterior.coords[:-1]  # Убираем последний элемент, который дублирует первый
+                    else:
+                        continue  # Игнорируем другие типы геометрии
+
+                    # Находим ближайшую точку на границе к точке пересечения
+                    nearest_boundary_point = min(area_boundary, key=lambda p: Point(inter_point).distance(Point(p)))
+
+                    # Добавляем точку обхода на границе
+                    path.append(nearest_boundary_point)
+                    current_point = Point(nearest_boundary_point)
+
+                    # Обходим зону запрета по границе
+                    boundary_path = []
+                    boundary_crossed = False
+
+                    # Начинаем обход по границе
+                    for i in range(len(area_boundary)):
+                        point = area_boundary[(area_boundary.index(nearest_boundary_point) + i) % len(area_boundary)]
+
+                        # Проверяем, пересекает ли граница с другими зонами
+                        boundary_line = LineString([current_point, point])
+                        if not any(boundary_line.intersects(restricted_area) for restricted_area in restricted_areas):
+                            boundary_path.append(point)
+                            current_point = Point(point)  # Обновляем текущую точку
+                        else:
+                            boundary_crossed = True
+                            break  # Если пересекает, прекращаем добавление
+
+                    # Добавляем точки границы (в обход)
+                    path.extend(boundary_path)
+
+                    # Проверяем, достигли ли мы конечной точки
+                    if current_point.distance(Point(end_point)) < 1e-5:  # Небольшая погрешность для сравнения
+                        path.append(end_point)
+                        return path
+
+        # Проверяем, достигли ли мы конечной точки
+        if current_point.distance(Point(end_point)) < 1e-5:
+            path.append(end_point)
+            return path
+
+    # В случае, если не удалось достичь конечной точки, добавляем её
+    if current_point.distance(Point(end_point)) >= 1e-5:
+        path.append(end_point)
+
+    return path
 
 
+# Обновленная функция маршрута
+@app.route('/orthodrome_with_restrictions', methods=['POST'])
+def orthodrome_with_restrictions():
+    try:
+        data = request.json
+        logging.debug(f"Received data: {data}")
 
+        start_point = data.get('start_point')
+        end_point = data.get('end_point')
+        restricted_areas = data.get('restricted_areas', [])
 
+        # Проверка корректности входных данных
+        if not (isinstance(start_point, list) and len(start_point) == 2):
+            return jsonify({"error": "Invalid start_point"}), 400
+        if not (isinstance(end_point, list) and len(end_point) == 2):
+            return jsonify({"error": "Invalid end_point"}), 400
+
+        # Преобразуем зоны запрета в объекты Polygon
+        restricted_areas = [Polygon(area) for area in restricted_areas]
+        logging.debug(f"Restricted areas: {restricted_areas}")
+
+        # Поиск кратчайшего пути с учетом запретных зон
+        shortest_path = find_shortest_path_with_restrictions(start_point, end_point, restricted_areas)
+        logging.debug(f"Shortest path: {shortest_path}")
+
+        if shortest_path:
+            return jsonify({
+                "coordinates": shortest_path,
+                "message": "Маршрут успешно построен с обходом зон запрета."
+            })
+        else:
+            return jsonify({
+                "coordinates": None,
+                "message": "Не удалось найти путь, обходящий зоны запрета."
+            })
+
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+        return jsonify({"error": "Internal Server Error"}), 500
 
 
 #########################2-я страница wkt ##########################################
@@ -125,9 +280,11 @@ def orthodrome():
 # Укажите путь к вашему DEM файлу (например, 'data/dem.tif')
 DEM_FILE_PATH = 'data/dem.tif'
 
+
 @app.route('/elevation-map')
 def elevation_map():
     return render_template("elevation.html")
+
 
 @app.route('/elevation', methods=['GET'])
 def get_elevation():
@@ -153,6 +310,7 @@ def get_elevation():
         "dem_bounds": dem_bounds
     })
 
+
 def add_elevation_to_wkt(wkt):
     coords_with_elevation = []
 
@@ -174,12 +332,14 @@ def add_elevation_to_wkt(wkt):
             for y, x in coords:  # Изменяем порядок на (широта, долгота)
                 elevation = get_elevation_from_dem(x, y)  # Передаем (долгота, широта)
                 if elevation is not None:
-                    coords_with_elevation.append(f"{int(y)} {int(x)} {elevation}")  # Поменяли порядок на (широта, долгота)
+                    coords_with_elevation.append(
+                        f"{int(y)} {int(x)} {elevation}")  # Поменяли порядок на (широта, долгота)
                 else:
                     coords_with_elevation.append(f"{int(y)} {int(x)} 0")  # Если высота не найдена, ставим 0
             return f"LINESTRING({', '.join(coords_with_elevation)})"
 
     return None
+
 
 def parse_wkt_point(wkt):
     try:
@@ -189,6 +349,7 @@ def parse_wkt_point(wkt):
         print(f"Error parsing POINT WKT: {e}")
         return None
 
+
 def parse_wkt_linestring(wkt):
     try:
         coords = wkt[wkt.index("(") + 1:wkt.index(")")].split(",")
@@ -197,10 +358,12 @@ def parse_wkt_linestring(wkt):
         print(f"Error parsing LINESTRING WKT: {e}")
         return None
 
+
 def is_within_bounds(lon, lat, dataset):
     """Проверяет, находятся ли координаты в пределах DEM-файла."""
     bounds = dataset.bounds
     return bounds.left <= lon <= bounds.right and bounds.bottom <= lat <= bounds.top
+
 
 def get_dem_bounds():
     try:
@@ -214,6 +377,7 @@ def get_dem_bounds():
             }
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 def get_elevation_from_dem(lon, lat):
     """Получает высоту из DEM-файла на основе долготы и широты."""
@@ -245,6 +409,7 @@ def get_elevation_from_dem(lon, lat):
     except Exception as e:
         print(f"Error getting elevation: {e}")
         return None
+
 
 if __name__ == '__main__':
     app.run(debug=True)

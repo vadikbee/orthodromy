@@ -179,12 +179,12 @@ def interpolate_points(start, end, num_points=5):
 
 def find_shortest_path_with_restrictions(start_point, end_point, restricted_areas):
     """
-    Находит кратчайший путь с учетом зон запрета, обходя их с адаптивным смещением и случайным направлением.
+    Находит кратчайший путь с учетом зон запрета, обходя их с адаптивным смещением и проверкой возможности вернуться на прямую траекторию после обхода.
     """
     path = [start_point]
     current_point = Point(start_point)
-    max_iterations = 5000  # Ограничение на количество итераций
-    buffer_distance = 0.001  # Начальное расстояние буфера вокруг запретной зоны
+    max_iterations = 1000  # Ограничение на количество итераций
+    buffer_distance = 0.0005  # Начальное расстояние буфера вокруг запретной зоны
     visited_points = set()  # Множество для отслеживания посещённых точек
 
     # Создаём буферные зоны для всех запретных зон
@@ -239,7 +239,16 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
                 visited_points.add(nearest_boundary_point)
                 current_point = Point(nearest_boundary_point)
 
-                # Двигаемся параллельно буферу с небольшим смещением для предотвращения повторных пересечений
+                # После обхода зоны создаем новую прямую к конечной точке
+                direct_path_after_avoidance = LineString([current_point, end_point])
+
+                # Проверяем, пересекает ли новая прямая с конечной точкой какие-либо запретные зоны
+                if not any(direct_path_after_avoidance.intersects(buffered_area) for buffered_area in buffered_areas):
+                    # Если прямая не пересекает запретные зоны, добавляем конечную точку
+                    path.append(end_point)
+                    return path
+
+                # Если новая прямая снова пересекает зону, продолжаем обход вдоль границы
                 parallel_offset = 0.0005  # Смещение параллельно границе
                 offset_point = Point(nearest_boundary_point).buffer(parallel_offset).exterior.coords[0]
                 path.append(offset_point)
@@ -249,6 +258,7 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
     # Если не удалось достичь конечной точки, сообщаем о проблеме
     print("Не удалось найти маршрут, обходящий зоны запрета. Попробуйте изменить начальную или конечную точку.")
     return path
+
 
 @app.route('/orthodrome_with_restrictions', methods=['POST'])
 def orthodrome_with_restrictions():

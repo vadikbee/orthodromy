@@ -29,6 +29,8 @@ def index():
     return render_template("zad.html")  # Отображаем HTML-шаблон
 
 
+
+
 # Функция для проверки пересечения маршрута с запрещенными зонами
 def check_intersections(route_coords, restricted_areas):
     route_line = LineString(route_coords)  # Создаем линию маршрута из координат
@@ -140,101 +142,114 @@ def orthodrome():
         return jsonify({"error": "Internal Server Error"}), 500  # Обработка ошибок
 
 
-################################################################################
 
-
-# Функция для нахождения кратчайшего пути с учетом нескольких зон запрета
+###################вв#############################################################
 from shapely.geometry import Point, LineString, Polygon
+from shapely.ops import nearest_points
 import logging
-import math
+from flask import Flask, request, jsonify
+import random
+import heapq
+
+# Настройка логирования
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+def get_nearest_boundary_point(inter_point, area):
+    """
+    Находит ближайшую точку на границе зоны к точке пересечения.
+    """
+    inter_point_coords = inter_point.coords[0] if inter_point.geom_type == 'Point' else list(inter_point.coords)[0]
+    area_boundary = area.exterior.coords[:-1]
+    return min(area_boundary, key=lambda p: Point(inter_point_coords).distance(Point(p)))
+
+
+def interpolate_points(start, end, num_points=5):
+    """
+    Интерполирует точки между двумя координатами для получения пути.
+    """
+    return [
+        (
+            start[0] + (end[0] - start[0]) * i / num_points,
+            start[1] + (end[1] - start[1]) * i / num_points
+        )
+        for i in range(1, num_points + 1)
+    ]
 
 
 def find_shortest_path_with_restrictions(start_point, end_point, restricted_areas):
+    """
+    Находит кратчайший путь с учетом зон запрета, обходя их с адаптивным смещением и случайным направлением.
+    """
     path = [start_point]
     current_point = Point(start_point)
-    max_iterations = 100  # Ограничение на количество итераций
-    iteration_count = 0
+    max_iterations = 1000  # Ограничение на количество итераций
+    buffer_distance = 0.0005  # Начальное расстояние буфера вокруг запретной зоны
+    visited_points = set()  # Множество для отслеживания посещённых точек
 
-    while iteration_count < max_iterations:
-        iteration_count += 1
+    # Создаём буферные зоны для всех запретных зон
+    buffered_areas = [area.buffer(buffer_distance) for area in restricted_areas]
+
+    for iteration_count in range(max_iterations):
+        print(f"Итерация {iteration_count + 1}: Текущая точка - {current_point}")
+
         # Создаем линию маршрута от текущей точки до конечной
         direct_path = LineString([current_point, end_point])
 
-        # Проверяем, пересекает ли маршрут какие-либо запретные зоны
-        intersects = any(direct_path.intersects(area) for area in restricted_areas)
+        # Проверяем, пересекает ли маршрут какие-либо буферные зоны запрета
+        intersects = any(direct_path.intersects(buffered_area) for buffered_area in buffered_areas)
 
         if not intersects:
-            # Если маршрут не пересекает запретные зоны, добавляем конечную точку и выходим из цикла
+            # Если маршрут не пересекает буферные зоны, добавляем конечную точку и выходим из цикла
             path.append(end_point)
             return path
 
-        logging.info("Route intersects with restricted area")
-
-        # Если есть пересечение, обходим зоны
-        for area in restricted_areas:
-            if direct_path.intersects(area):
-                # Находим точки пересечения
-                intersection = direct_path.intersection(area)
+        # Если есть пересечение, обходим буферные зоны
+        for area, buffered_area in zip(restricted_areas, buffered_areas):
+            if direct_path.intersects(buffered_area):
+                # Находим первую точку пересечения с буферной зоной
+                intersection = direct_path.intersection(buffered_area)
 
                 if intersection.is_empty:
                     continue
 
-                # Получаем все точки пересечения
-                intersection_points = list(intersection.coords)
+                # Получаем координаты первой точки пересечения
+                inter_point = list(intersection.coords)[0]
+                nearest_boundary_point = get_nearest_boundary_point(Point(inter_point), buffered_area)
 
-                # Обрабатываем каждую точку пересечения
-                for inter_point in intersection_points:
-                    # Проверяем, является ли зона многоугольником
-                    if area.geom_type == 'Polygon':
-                        area_boundary = area.exterior.coords[:-1]  # Убираем последний элемент, который дублирует первый
-                    else:
-                        continue  # Игнорируем другие типы геометрии
+                # Логируем информацию о пересечении
+                print(f"Пересечение с запретной зоной. Точка пересечения: {inter_point}")
+                print(f"Ближайшая точка на границе: {nearest_boundary_point}")
 
-                    # Находим ближайшую точку на границе к точке пересечения
-                    nearest_boundary_point = min(area_boundary, key=lambda p: Point(inter_point).distance(Point(p)))
+                # Если точка уже была посещена, увеличиваем буфер и пытаемся сместиться
+                if nearest_boundary_point in visited_points:
+                    buffer_distance += 0.001  # Увеличиваем буферное расстояние
+                    buffered_areas = [area.buffer(buffer_distance) for area in restricted_areas]
+                    print(f"Зацикливание обнаружено. Увеличиваем буфер до {buffer_distance} и пробуем сместиться.")
 
-                    # Добавляем точку обхода на границе
-                    path.append(nearest_boundary_point)
-                    current_point = Point(nearest_boundary_point)
+                    # Случайно выбираем противоположную точку на границе, чтобы изменить направление
+                    random_boundary_point = random.choice(buffered_area.exterior.coords)
+                    path.append(random_boundary_point)
+                    current_point = Point(random_boundary_point)
+                    visited_points.add(random_boundary_point)
+                    break
 
-                    # Обходим зону запрета по границе
-                    boundary_path = []
-                    boundary_crossed = False
+                # Если точка не была посещена, добавляем её к маршруту
+                path.append(nearest_boundary_point)
+                visited_points.add(nearest_boundary_point)
+                current_point = Point(nearest_boundary_point)
 
-                    # Начинаем обход по границе
-                    for i in range(len(area_boundary)):
-                        point = area_boundary[(area_boundary.index(nearest_boundary_point) + i) % len(area_boundary)]
+                # Двигаемся параллельно буферу с небольшим смещением для предотвращения повторных пересечений
+                parallel_offset = 0.0005  # Смещение параллельно границе
+                offset_point = Point(nearest_boundary_point).buffer(parallel_offset).exterior.coords[0]
+                path.append(offset_point)
+                current_point = Point(offset_point)
+                break  # Переходим к следующей итерации цикла
 
-                        # Проверяем, пересекает ли граница с другими зонами
-                        boundary_line = LineString([current_point, point])
-                        if not any(boundary_line.intersects(restricted_area) for restricted_area in restricted_areas):
-                            boundary_path.append(point)
-                            current_point = Point(point)  # Обновляем текущую точку
-                        else:
-                            boundary_crossed = True
-                            break  # Если пересекает, прекращаем добавление
-
-                    # Добавляем точки границы (в обход)
-                    path.extend(boundary_path)
-
-                    # Проверяем, достигли ли мы конечной точки
-                    if current_point.distance(Point(end_point)) < 1e-5:  # Небольшая погрешность для сравнения
-                        path.append(end_point)
-                        return path
-
-        # Проверяем, достигли ли мы конечной точки
-        if current_point.distance(Point(end_point)) < 1e-5:
-            path.append(end_point)
-            return path
-
-    # В случае, если не удалось достичь конечной точки, добавляем её
-    if current_point.distance(Point(end_point)) >= 1e-5:
-        path.append(end_point)
-
+    # Если не удалось достичь конечной точки, сообщаем о проблеме
+    print("Не удалось найти маршрут, обходящий зоны запрета. Попробуйте изменить начальную или конечную точку.")
     return path
 
-
-# Обновленная функция маршрута
 @app.route('/orthodrome_with_restrictions', methods=['POST'])
 def orthodrome_with_restrictions():
     try:
@@ -273,7 +288,6 @@ def orthodrome_with_restrictions():
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
         return jsonify({"error": "Internal Server Error"}), 500
-
 
 #########################2-я страница wkt ##########################################
 

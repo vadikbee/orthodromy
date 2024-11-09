@@ -184,7 +184,7 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
     path = [start_point]
     current_point = Point(start_point)
     max_iterations = 1000  # Ограничение на количество итераций
-    buffer_distance = 0.0005  # Начальное расстояние буфера вокруг запретной зоны
+    buffer_distance = 0.001  # Начальное расстояние буфера вокруг запретной зоны
     visited_points = set()  # Множество для отслеживания посещённых точек
 
     # Создаём буферные зоны для всех запретных зон

@@ -184,7 +184,7 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
     path = [start_point]
     current_point = Point(start_point)
     max_iterations = 1000  # Ограничение на количество итераций
-    buffer_distance = 0.001  # Начальное расстояние буфера вокруг запретной зоны
+    buffer_distance = 0.006  # Начальное расстояние буфера вокруг запретной зоны
     visited_points = set()  # Множество для отслеживания посещённых точек
 
     # Создаём буферные зоны для всех запретных зон
@@ -223,7 +223,7 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
 
                 # Если точка уже была посещена, увеличиваем буфер и пытаемся сместиться
                 if nearest_boundary_point in visited_points:
-                    buffer_distance += 0.001  # Увеличиваем буферное расстояние
+                    buffer_distance += 0.0001  # Увеличиваем буферное расстояние
                     buffered_areas = [area.buffer(buffer_distance) for area in restricted_areas]
                     print(f"Зацикливание обнаружено. Увеличиваем буфер до {buffer_distance} и пробуем сместиться.")
 
@@ -249,7 +249,7 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
                     return path
 
                 # Если новая прямая снова пересекает зону, продолжаем обход вдоль границы
-                parallel_offset = 0.0005  # Смещение параллельно границе
+                parallel_offset = 0.00001  # Смещение параллельно границе
                 offset_point = Point(nearest_boundary_point).buffer(parallel_offset).exterior.coords[0]
                 path.append(offset_point)
                 current_point = Point(offset_point)

@@ -35,6 +35,7 @@
             border: 1px solid #ccc;
             border-radius: 5px;
             display: block;
+            max-width: 600px; /* Ограничиваем ширину формы */
         }
 
         .back-button, .submit-button {
@@ -116,6 +117,26 @@
 
     <script>
         ymaps.ready(init);
+
+        function adjustMapSize() {
+            const mapContainer = document.getElementById('map');
+            const windowHeight = window.innerHeight;
+            const windowWidth = window.innerWidth;
+
+            // Устанавливаем ширину и высоту карты
+            mapContainer.style.width = `${Math.min(windowWidth * 0.9, 1200)}px`; // 90% от ширины окна, но не больше 1200px
+            mapContainer.style.height = `${Math.min(0.7 * windowHeight, 900)}px`; // 70% от высоты окна, но не больше 900px
+
+            // Обновляем размеры карты в Яндекс API
+            if (myMap) {
+                myMap.container.fitToViewport();
+            }
+        }
+
+// Применяем настройки при загрузке и изменении размеров окна
+window.addEventListener('load', adjustMapSize);
+window.addEventListener('resize', adjustMapSize);
+
 
         function init() {
             var myMap = new ymaps.Map("map", {

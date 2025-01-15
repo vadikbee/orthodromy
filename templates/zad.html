@@ -16,10 +16,11 @@
         }
 
         #map {
-            height: 700px;
-            margin: 20px auto;
-            width: 80%;
-            border: 10px solid rgba(0, 0, 0, 0.5);
+            width: 1000px; /* Фиксированная ширина карты */
+            height: 700px; /* Фиксированная высота карты */
+            margin: 20px auto; /* Центрирование карты */
+            border: 10px solid rgba(0, 0, 0, 0.5); /* Граница карты */
+            box-sizing: border-box; /* Учитываем границы и отступы */
         }
 
         form {
@@ -28,6 +29,7 @@
             background-color: rgba(0, 0, 0, 0.4);
             padding: 10px 20px;
             border-radius: 10px;
+            max-width: 600px; /* Ограничиваем ширину формы */
         }
 
         input {
@@ -36,6 +38,7 @@
             width: 100%;
             padding: 5px;
             text-align: center;
+            width: 90%; /* Устанавливаем ширину в процентах */
         }
 
         label {
@@ -47,10 +50,11 @@
             display: flex;
             justify-content: space-between;
             margin-top: 10px;
+            flex-wrap: wrap; /* Кнопки будут располагаться по вертикали на маленьких экранах */
         }
 
         button {
-            width: auto;
+            width: 48%; /* Уменьшаем кнопки для компактного отображения */
             padding: 15px 20px;
             background-color: #4CAF50;
             color: white;
@@ -85,6 +89,7 @@
             position: absolute;
             top: 50px;
             left: 30px;
+            width: auto; /* Уменьшаем кнопки для компактного отображения */
         }
 
         .back-button:hover {
@@ -145,6 +150,24 @@ function init() { //должна быть всегда тут
         center: [55.76, 37.64],
         zoom: 10
     });
+
+         // Функция для динамической подстройки карты
+    function adjustMapSize() {
+        const mapContainer = document.getElementById('map');
+        const windowHeight = window.innerHeight;
+
+        // Устанавливаем высоту карты в зависимости от высоты окна
+        mapContainer.style.height = `${Math.min(0.7 * windowHeight, 900)}px`; // 70% от высоты окна, но не больше 900px
+
+        // Обновляем размеры карты в Яндекс API
+        if (myMap) {
+            myMap.container.fitToViewport();
+        }
+    }
+
+    // Применяем настройки при загрузке и изменении размеров окна
+    window.addEventListener('load', adjustMapSize);
+    window.addEventListener('resize', adjustMapSize);
 
 
 

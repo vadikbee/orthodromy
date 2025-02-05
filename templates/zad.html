@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ортодромия</title>
+
+
     <style>
         body {
             text-align: center;
@@ -126,6 +128,17 @@
             background-color: #333;
         }
 
+        #bespilot-text {
+
+         font-size: 18px;
+         display: inline-block;  /* Чтобы текст не занимал всю ширину контейнера */
+         background-color: rgba(255, 255, 255, 0.7);  /* Белый фон с 70% непрозрачности */
+         padding: 10px 20px;  /* Отступы внутри блока */
+         border-radius: 8px;  /* Округленные углы */
+         color: black;  /* Цвет текста */
+         margin-bottom: 10px;  /* Отступ снизу (например, 20px) */
+        }
+
     </style>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
 </head>
@@ -146,6 +159,15 @@
         <label>Количество узлов:</label>
         <input type="number" id="num_nodes" value="20"><br>
 
+         <div id="bespilot-text"><label>Скорость и высота полета беспилотника</label></div>
+        <div class="form-right">
+        <label>Скорость (м/с):</label>
+        <input type="number" id="speed" placeholder="Введите скорость в м/с" min="0" step="0.1"><br>
+
+        <label>Высота (м):</label>
+        <input type="number" id="altitude" placeholder="Введите высоту в метрах" min="0" step="1"><br>
+        </div>
+
         <div class="buttons">
             <button type="submit" id="postroit">Построить ортодромию</button>
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
@@ -154,9 +176,11 @@
             <button onclick="disableAlerts(); buildRoute(); window.location.href='/elevation-map'" class="back-button">Перейти на карту для WKT</button>
             <button type="button" id="start-drawing">Начать/Закончить рисовать зону запрета полетов</button>
             <button type="button" id="build-restricted-area">Построить запретную зону</button>
-               <button type="button" id="orta-zapret">Ортодромия с зонами запрета <br> (каждое нажатие - перестроение)</button>
+            <button type="button" id="orta-zapret">Ортодромия с зонами запрета <br> (каждое нажатие - перестроение)</button>
         </div>
     </form>
+
+
     <div id="map"></div>
     <script>
 // работа с картой

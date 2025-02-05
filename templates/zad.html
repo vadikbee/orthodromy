@@ -23,6 +23,11 @@
             box-sizing: border-box; /* Учитываем границы и отступы */
         }
 
+        #downloadButton {
+           
+            z-index: 9999;  /* Убедитесь, что кнопка находится сверху всех других элементов */
+        }
+
         form {
             display: inline-block;
             text-align: center;
@@ -87,12 +92,37 @@
             border-radius: 5px;
             transition: background-color 0.3s;
             position: absolute;
+            position: fixed;
             top: 50px;
             left: 30px;
             width: auto; /* Уменьшаем кнопки для компактного отображения */
         }
 
+        .dowlad-button {
+            background-color: black;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            font-size: 16px;
+            margin: 10px auto;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            position: absolute;
+            position: fixed;
+            top: 100px;
+            left: 30px;
+
+            width: auto; /* Уменьшаем кнопки для компактного отображения */
+        }
+
         .back-button:hover {
+            background-color: #333;
+        }
+        .dowlad-button:hover {
             background-color: #333;
         }
 
@@ -105,11 +135,11 @@
     <div id="krivaya2-text"><label><span style="color: rgb(155, 16, 17);">Бордовая</span> линия - кривая</label></div>
 
     <form id="form">
-        <label>Координаты начальной точки (долгота, широта):<br>
+        <label>Координаты начальной точки (широта, долгота):<br>
         55.861090, 37.625316 (Москва)</label>
         <input type="text" id="start_point" placeholder="Например, 37.625316, 55.861090"><br>
 
-        <label>Координаты конечной точки (долгота, широта):<br>
+        <label>Координаты конечной точки (широта, долгота):<br>
         53.902735, 27.555691 (Беларусь)</label>
         <input type="text" id="end_point" placeholder="Например, 27.555691, 53.902735"><br>
 
@@ -120,20 +150,15 @@
             <button type="submit" id="postroit">Построить ортодромию</button>
             <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
             <button type="button" id="reset">Сбросить</button>
-
-
+            <button type="button" id="downloadButton" class="dowlad-button">Скачать маршрут (KMZ)</button>
             <button onclick="disableAlerts(); buildRoute(); window.location.href='/elevation-map'" class="back-button">Перейти на карту для WKT</button>
-
-            <button type="button" id="start-drawing">Начать/Закончить рисовать зону полета</button>
+            <button type="button" id="start-drawing">Начать/Закончить рисовать зону запрета полетов</button>
             <button type="button" id="build-restricted-area">Построить запретную зону</button>
                <button type="button" id="orta-zapret">Ортодромия с зонами запрета <br> (каждое нажатие - перестроение)</button>
         </div>
     </form>
-
     <div id="map"></div>
-
     <script>
-
 // работа с картой
 ymaps.ready(init); // Дожидаемся загрузки API Яндекс.Карт
 var myMap, isOrthodrome = true, coords;
@@ -150,6 +175,65 @@ function init() { //должна быть всегда тут
         center: [55.76, 37.64],
         zoom: 10
     });
+    //console.log("Карта инициализирована:", myMap);
+
+
+/////////////////////////////////////функции для сглаживания обхода/////////////////////////////////////
+
+   /* // Функция для построения Catmull-Rom сплайна
+    function catmullRomSpline(points, numSegments = 100) {
+        const splinePoints = [];
+
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[Math.max(i - 1, 0)];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[Math.min(i + 2, points.length - 1)];
+
+            for (let t = 0; t <= 1; t += 1 / numSegments) {
+                const t2 = t * t;
+                const t3 = t2 * t;
+
+                const x = 0.5 * ((-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3
+                    + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
+                    + (-p0[0] + p2[0]) * t
+                    + 2 * p1[0]);
+
+                const y = 0.5 * ((-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3
+                    + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
+                    + (-p0[1] + p2[1]) * t
+                    + 2 * p1[1]);
+
+                splinePoints.push([x, y]);
+            }
+        }
+
+        return splinePoints;
+    } */
+
+    // Функция линейной интерполяции между двумя точками
+    function interpolatePoints(p1, p2, numPoints) {
+        const interpolated = [];
+        for (let i = 0; i <= numPoints; i++) {
+            const t = i / numPoints;
+            const x = p1[0] + t * (p2[0] - p1[0]);
+            const y = p1[1] + t * (p2[1] - p1[1]);
+            interpolated.push([x, y]);
+        }
+        return interpolated;
+    }
+
+    // Функция добавления точек для всей линии
+    function smoothRoute(routeCoords, numSegments = 10) {
+        const smoothCoords = [];
+        for (let i = 0; i < routeCoords.length - 1; i++) {
+            smoothCoords.push(...interpolatePoints(routeCoords[i], routeCoords[i + 1], numSegments));
+        }
+        return smoothCoords;
+    }
+/////////////////////////////////////функции для сглаживания линии обхода /////////////////////////////////////
+
+
 
          // Функция для динамической подстройки карты
     function adjustMapSize() {
@@ -236,7 +320,7 @@ async function buildRouteAvoidingZones(routeCoords, zones) {
     const [startPoint, endPoint] = [routeCoords[0], routeCoords.at(-1)];
     const restrictedAreas = zones.map(zone => zone.geometry.getCoordinates()[0]);
 
-    console.log('Start:', startPoint, 'End:', endPoint, 'Restricted Areas:', restrictedAreas);
+   // console.log('Start:', startPoint, 'End:', endPoint, 'Restricted Areas:', restrictedAreas);
 
     try {
         let attempts = 0;
@@ -252,7 +336,7 @@ async function buildRouteAvoidingZones(routeCoords, zones) {
             });
             data = await response.json();
 
-            console.log('Response data:', data);
+          //  console.log('Response data:', data);
 
             if (data.coordinates?.length > 2) {
                 // Проверка на пересечение с запретными зонами
@@ -265,7 +349,7 @@ async function buildRouteAvoidingZones(routeCoords, zones) {
                 });
 
                 if (isIntersectingRestrictedArea) {
-                    console.log(`Попытка ${attempts + 1}: Маршрут всё ещё пересекает запретные зоны, пересчитываем...`);
+                 //   console.log(`Попытка ${attempts + 1}: Маршрут всё ещё пересекает запретные зоны, пересчитываем...`);
                     attempts++;
                 }
             } else {
@@ -429,6 +513,10 @@ function buildRestrictedArea() {
     }
     points = []; // Очищаем массив точек после создания зоны
 }
+document.getElementById('postroit').addEventListener('click', function(event) {
+    event.preventDefault();
+    buildRoute();
+});
 
 // Функция построения ортодромии и проверки пересечения с зонами запрета
 function buildRoute() {
@@ -437,11 +525,11 @@ function buildRoute() {
     var numNodes = parseInt(document.getElementById('num_nodes').value);
 
     if (startPoint.length !== 2 || isNaN(startPoint[0]) || isNaN(startPoint[1])) {
-        alert("Пожалуйста, введите корректные координаты начальной точки (долгота, широта).");
+        alert("Пожалуйста, введите корректные координаты начальной точки (широта, долгота).");
         return;
     }
     if (endPoint.length !== 2 || isNaN(endPoint[0]) || isNaN(endPoint[1])) {
-        alert("Пожалуйста, введите корректные координаты конечной точки (долгота, широта).");
+        alert("Пожалуйста, введите корректные координаты конечной точки (широта, долгота).");
         return;
     }
     if (isNaN(numNodes) || numNodes < 2) {
@@ -451,6 +539,8 @@ function buildRoute() {
 
     // Удаляем только предыдущие маршруты
     removeRoutes();
+
+
 
     fetch('/orthodrome', {  // связь с бэкендом
         method: 'POST',
@@ -467,7 +557,7 @@ function buildRoute() {
     })
     .then(response => response.json())
     .then(data => {
-        const coords = data.coordinates.map(coord => [coord[1], coord[0]]);
+        const coords = data.coordinates.map(coord => [coord[0], coord[1]]);
 
         const routeLine = new ymaps.Polyline(coords, {
             balloonContent: 'Маршрут'
@@ -479,6 +569,8 @@ function buildRoute() {
         myMap.geoObjects.add(routeLine);
         routes.push(routeLine);
         myMap.setBounds(routeLine.geometry.getBounds());
+        // Сохраняем маршрут в KMZ
+        //saveRouteAsKMZ(coords);  // Новая функция для сохранения маршрута в KMZ
 
         // Проверка пересечений маршрута с зонами запрета
         checkIntersections(coords);  // Здесь обновляем проверку пересечений
@@ -487,6 +579,49 @@ function buildRoute() {
         console.error('Ошибка:', error);
     });
 }
+
+/////////////////////////////////////////////при нажатии кнопки качается файл в KMZ///////////////////////////////////////////////////////////////
+
+document.getElementById('downloadButton').addEventListener('click', function() {
+    downloadKMZ();
+});
+
+// Функция для скачивания маршрута в KMZ
+function downloadKMZ() {
+    const routeCoords = routes[0].geometry.getCoordinates(); // Получаем координаты маршрута
+
+    if (!routeCoords || routeCoords.length === 0) {
+        alert("Маршрут не построен. Пожалуйста, постройте маршрут перед скачиванием.");
+        return;
+    }
+
+    fetch('/create_kmz', { // Отправляем координаты на сервер для создания KMZ
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            coordinates: routeCoords
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.kmz_url) {
+            // Скачиваем файл
+            const downloadLink = document.createElement('a');
+            downloadLink.href = data.kmz_url;
+            downloadLink.download = 'route.kmz';
+            downloadLink.click();
+        } else {
+            alert('Произошла ошибка при сохранении маршрута.');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Произошла ошибка при сохранении маршрута.');
+    });
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Функция проверки пересечения и возвращения точек пересечения сегмента с полигоном
 function getIntersectionPoints(segment, polygon) {
@@ -505,7 +640,7 @@ function getIntersectionPoints(segment, polygon) {
     return intersectionPoints;
 }
 
-// Функция нахождения точки пересечения двух отрезков
+
 // Функция нахождения точки пересечения двух отрезков
 function findIntersection(seg1, seg2) {
     const [p1, p2] = seg1;
@@ -537,21 +672,30 @@ function findIntersection(seg1, seg2) {
 // Объявляем переменную для отслеживания показа предупреждения
 let intersectionAlertShown = false;
 
+/////////////////////////////////////// ЛИНИЯ ПЕРЕСЕЧЕНИЯ С ЗОНОЙ ЗАПРЕТА ///////////////////////////////////////
 
 function checkIntersections(coords) {
     let hasIntersection = false;
+
+   //  console.log("Координаты маршрута:", coords);
 
     // Проход по каждому сегменту маршрута
     for (let i = 0; i < coords.length - 1; i++) {
         const segment = [coords[i], coords[i + 1]];
 
+       // console.log("Сегмент маршрута:", segment); // Логируем текущий сегмент
+
         restrictedAreas.forEach(area => {
             const areaCoords = area.geometry.getCoordinates()[0];
             const intersections = getIntersectionPoints(segment, areaCoords);
 
+          //    console.log("Координаты запретной зоны:", areaCoords);
+
             // Проверка на наличие пересечений
             if (intersections.length > 0 || isSegmentInPolygon(segment, areaCoords)) {
                 hasIntersection = true;
+
+            //    console.log("Пересечения:", intersections); // Логируем пересечения
 
                 // Если отрезок находится полностью внутри зоны запрета
                 if (isSegmentInPolygon(segment, areaCoords)) {
@@ -569,6 +713,9 @@ function checkIntersections(coords) {
                 else if (intersections.length > 0) {
                     let startPoint = intersections[0];
                     let endPoint = intersections[intersections.length - 1];
+
+                  //  console.log("Начальная точка пересечения:", startPoint);
+                   // console.log("Конечная точка пересечения:", endPoint);
 
                     // Если пересечение начинается в начале сегмента или сегмент начинается в зоне
                     if (isPointInPolygon(segment[0], areaCoords)) {
@@ -595,7 +742,7 @@ function checkIntersections(coords) {
             }
         });
     }
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Если есть пересечение, показываем предупреждение
     if (hasIntersection && !intersectionAlertShown) {
         alert("Маршрут пересекает запретные зоны!");
@@ -747,12 +894,7 @@ function resetMap() {
 
         let routeCoords = []; // Массив для хранения координат маршрута
 
-// Предположим, вы используете события карты для сбора координат
-myMap.events.add('click', function (e) {
-    let coords = e.get('coords'); // Получаем координаты клика
-    routeCoords.push(coords); // Добавляем координаты в массив
-    // Добавляем точку на карту (или используйте другой метод для рисования маршрута)
-});
+
 
 // Вызывайте эту функцию, когда пользователь завершает рисование маршрута
 function finalizeRoute() {
@@ -846,10 +988,13 @@ fetch('/orthodrome', {
 .catch(error => console.error('Ошибка:', error));
 
 
+ /////////////////////////////// KMZ /////////////////////
+
+
+
+
+
 
 </script>
-
-
-
 </body>
 </html>

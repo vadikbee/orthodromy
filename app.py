@@ -1,32 +1,50 @@
+#################################    ПОЯСНЕНИЕ    #################################
+
+#################################    сначала передается долгота, а потом широта (реверснуты) т.е где широта --> долгота    #################################
+
 from flask import Flask, request, jsonify, render_template
 from pyproj import Geod
 import rasterio
 from rasterio.warp import transform
-from shapely.geometry import LineString, MultiLineString, Polygon
 from flask_cors import CORS
 import logging
-from heapq import heappop, heappush
-from shapely.ops import nearest_points
-from shapely.geometry import Point, LineString, Polygon
+import os
 
 # Создаем экземпляр Flask приложения
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
+
 # Разрешаем CORS для этого приложения
 CORS(app)
 # Включаем режим отладки
 app.debug = True
 
+# Папка для сохранения файлов в проекте (папка static)
+app.config['UPLOAD_FOLDER'] = 'static'  # Папка для сохранения файлов
+
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
+    logging.info("Папка для сохранения файлов была создана.")
+else:
+    logging.info("Папка для сохранения файлов уже существует.")
+
+
+# Убедитесь, что папка существует
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
+
 # Инициализация геоида WGS84 для вычисления ортодромии123
 geod = Geod(ellps="WGS84")
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 # Маршрут для отображения главной HTML-страницы
 @app.route('/', methods=['GET'])
 def index():
     return render_template("zad.html")  # Отображаем HTML-шаблон
+
 
 
 
@@ -81,65 +99,68 @@ def is_route_too_close_to_restricted_areas(route, restricted_areas, threshold=0.
 @app.route('/orthodrome', methods=['POST'])
 def orthodrome():
     try:
-        # Получаем данные из запроса
         data = request.json
-        logging.debug(f"Received data: {data}")
+        logging.debug(f"Received data: {data}")  # Логируем полученные данные
 
-        # Извлекаем начальную и конечную точки, количество узлов и тип маршрута
         start_point = data.get('start_point')
         end_point = data.get('end_point')
-        num_nodes = data.get('num_nodes', 1000)  # Устанавливаем значение по умолчанию
+        num_nodes = data.get('num_nodes', 1000)
         is_orthodrome = data.get('orthodrome', True)
-        restricted_areas = data.get('restricted_areas', [])  # Получаем зоны запрета
+        restricted_areas = data.get('restricted_areas', [])
+
+        logging.debug(f"Start point: {start_point}, End point: {end_point}, Restricted areas: {restricted_areas}")
 
         # Проверка входных данных
         if not (isinstance(start_point, list) and len(start_point) == 2):
+            logging.error("Invalid start_point")
             return jsonify({"error": "Invalid start_point"}), 400
         if not (isinstance(end_point, list) and len(end_point) == 2):
+            logging.error("Invalid end_point")
             return jsonify({"error": "Invalid end_point"}), 400
         if not isinstance(num_nodes, int) or num_nodes < 2:
+            logging.error("Invalid num_nodes")
             return jsonify({"error": "Invalid num_nodes"}), 400
 
         # Проверка формата restricted_areas
         if not isinstance(restricted_areas, list) or any(not isinstance(area, list) for area in restricted_areas):
+            logging.error("Invalid restricted_areas format")
             return jsonify({"error": "Invalid restricted_areas format"}), 400
 
         # Преобразуем зоны запрета в объекты Polygon
         try:
-            restricted_areas = [Polygon(area) for area in restricted_areas if len(area) > 1]
+            restricted_areas = [Polygon([(lat, lon) for lon, lat in area]) for area in restricted_areas if len(area) > 1]
+
+            logging.debug(f"Restricted areas as Polygons: {restricted_areas}")
         except Exception as e:
             logging.error(f"Error occurred while creating polygons: {str(e)}")
             return jsonify({"error": f"Invalid restricted_areas: {str(e)}"}), 400
 
-        lon1, lat1 = start_point  # Извлекаем координаты начальной точки
-        lon2, lat2 = end_point  # Извлекаем координаты конечной точки
+        lat1, lon1 = start_point
+        lat2, lon2 = end_point
 
         # Создаем маршрут
         if is_orthodrome:
-            # Ортодромический маршрут с большим количеством узлов
-            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 2000)  # Больше узлов для большей точности кривой
+            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 2000)
         else:
-            # Прямой маршрут
             lons = [lon1 + (lon2 - lon1) * i / (num_nodes - 1) for i in range(num_nodes)]
             lats = [lat1 + (lat2 - lat1) * i / (num_nodes - 1) for i in range(num_nodes)]
-            points = zip(lons, lats)  # Соединяем долготы и широты в пары
+            points = zip(lons, lats)
 
-        # Формируем полный список координат маршрута
         coordinates = [(lon1, lat1)] + list(points) + [(lon2, lat2)]
 
         # Проверка близости к запрещенным зонам
         if is_route_too_close_to_restricted_areas(coordinates, restricted_areas):
             return jsonify({"error": "Маршрут слишком близок к запрещенной зоне!"}), 400
 
-        # Возвращаем координаты
         return jsonify({
             "coordinates": coordinates,
-            "warning": None  # Нет предупреждений
+            "warning": None
         })
 
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
-        return jsonify({"error": "Internal Server Error"}), 500  # Обработка ошибок
+        return jsonify({"error": "Internal Server Error"}), 500
+
 
 
 
@@ -299,6 +320,56 @@ def orthodrome_with_restrictions():
         logging.error(f"An error occurred: {str(e)}")
         return jsonify({"error": "Internal Server Error"}), 500
 
+#---------------------------------------------- KMZ --------------------------------------------
+import zipfile
+import xml.etree.ElementTree as ET
+import os
+from flask import send_from_directory
+
+
+@app.route('/create_kmz', methods=['POST'])
+def create_kmz():
+    try:
+        # Получаем координаты маршрута из запроса
+        data = request.json
+        coordinates = data.get("coordinates", [])
+
+        # Если координаты пустые, возвращаем ошибку
+        if not coordinates:
+            return jsonify({"error": "Нет данных для маршрута"}), 400
+
+        # Создаем KML структуру
+        kml = ET.Element("kml", xmlns="http://www.opengis.net/kml/2.2")
+        document = ET.SubElement(kml, "Document")
+        placemark = ET.SubElement(document, "Placemark")
+        name = ET.SubElement(placemark, "name")
+        name.text = "Маршрут"
+        line_string = ET.SubElement(placemark, "LineString")
+        coordinates_element = ET.SubElement(line_string, "coordinates")
+
+        # Добавляем координаты маршрута в KML
+        coords_text = ' '.join([f"{coord[1]},{coord[0]},0" for coord in coordinates])  #  широта, высота (0)
+        coordinates_element.text = coords_text
+
+        # Создаем дерево XML и сохраняем его как KML файл
+        kml_tree = ET.ElementTree(kml)
+        kml_file_path = os.path.join(app.config['UPLOAD_FOLDER'], 'route.kml')
+        kml_tree.write(kml_file_path)
+
+        # Теперь создаем KMZ архив с этим KML файлом
+        kmz_file_path = os.path.join(app.config['UPLOAD_FOLDER'], 'route.kmz')
+        with zipfile.ZipFile(kmz_file_path, 'w', zipfile.ZIP_DEFLATED) as kmz:
+            kmz.write(kml_file_path, 'doc.kml')  # Добавляем KML в KMZ архив
+
+        # Удаляем временный KML файл
+        os.remove(kml_file_path)
+
+        return jsonify({"message": "Маршрут сохранен в формате KMZ", "kmz_url": '/static/route.kmz'})
+    except Exception as e:
+        logging.error(f"Ошибка при создании KMZ: {str(e)}")
+        return jsonify({"error": "Ошибка при создании KMZ"}), 500
+#----------------------------------------------  --------------------------------------------
+
 #########################2-я страница wkt ##########################################
 
 # Укажите путь к вашему DEM файлу (например, 'data/dem.tif')
@@ -433,6 +504,7 @@ def get_elevation_from_dem(lon, lat):
     except Exception as e:
         print(f"Error getting elevation: {e}")
         return None
+
 
 
 if __name__ == '__main__':

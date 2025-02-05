@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ортодромия</title>
@@ -25,10 +26,7 @@
             box-sizing: border-box; /* Учитываем границы и отступы */
         }
 
-        #downloadButton {
-           
-            z-index: 9999;  /* Убедитесь, что кнопка находится сверху всех других элементов */
-        }
+
 
         form {
             display: inline-block;
@@ -56,6 +54,7 @@
         .buttons {
             display: flex;
             justify-content: space-between;
+
             margin-top: 10px;
             flex-wrap: wrap; /* Кнопки будут располагаться по вертикали на маленьких экранах */
         }
@@ -64,6 +63,7 @@
             width: 48%; /* Уменьшаем кнопки для компактного отображения */
             padding: 15px 20px;
             background-color: #4CAF50;
+
             color: white;
             border: none;
             cursor: pointer;
@@ -71,13 +71,32 @@
             margin-top: 10px;
         }
 
+        }
 
-        #krivaya-text,
-        #krivaya2-text {
+
+        .krivaya {
             font-size: 20px;
             color: black;
             padding: 10px 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
         }
+
+        .krivaya span {
+        font-size: 20px;
+        margin-bottom: 10px;
+        font-weight: bold;
+        }
+        .krivaya2 span {
+        font-size: 20px;
+        margin-bottom: 10px;
+        font-weight: bold;
+        }
+
+        #krivaya-text, #krivaya2-text {
+        margin-bottom: 20px;
+        }
+
 
          /* Стили для кнопки перехода на карту для WKT */
         .back-button {
@@ -121,12 +140,6 @@
             width: auto; /* Уменьшаем кнопки для компактного отображения */
         }
 
-        .back-button:hover {
-            background-color: #333;
-        }
-        .dowlad-button:hover {
-            background-color: #333;
-        }
 
         #bespilot-text {
 
@@ -137,15 +150,36 @@
          border-radius: 8px;  /* Округленные углы */
          color: black;  /* Цвет текста */
          margin-bottom: 10px;  /* Отступ снизу (например, 20px) */
+         font-weight: bold;
         }
+        .send-button {
+        background-color: white;
+        color: black;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;
+        display: block;
+        font-size: 16px;
+        margin: 10px auto;
+        cursor: pointer;
+        border-radius: 5px;
+        transition: background-color 0.3s;
+        border: 2px solid black;  /* Черная рамка */
+        }
+
+
+    .button:hover, .back-button:hover, .dowlad-button:hover, .send-button:hover, .knopki-meny:hover  {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
 
     </style>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
 </head>
 <body>
     <h1>Ортодромия</h1>
-    <div id="krivaya-text"><label><span style="color: blue;">Синяя</span> линия - прямая</label></div>
-    <div id="krivaya2-text"><label><span style="color: rgb(155, 16, 17);">Бордовая</span> линия - кривая</label></div>
+    <div id="krivaya-text" class="krivaya"><label> <span style="color: blue;">Синяя</span> <span style="color: black;">линия - прямая </span> </label></div>
+    <div id="krivaya2-text" class="krivaya2"><label><span style="color: rgb(155, 16, 17);">Бордовая</span> <span style="color: black;">линия - кривая </span> </label></div>
 
     <form id="form">
         <label>Координаты начальной точки (широта, долгота):<br>
@@ -169,14 +203,16 @@
         </div>
 
         <div class="buttons">
-            <button type="submit" id="postroit">Построить ортодромию</button>
-            <button type="button" id="toggle-curve">Переключить на кривую/прямую линию</button>
-            <button type="button" id="reset">Сбросить</button>
+            <button type="submit" id="postroit" class="knopki-meny">Построить ортодромию</button>
+            <button type="button" id="toggle-curve" class="knopki-meny">Переключить на кривую/прямую линию</button>
+            <button type="button" id="reset" class="knopki-meny">Сбросить</button>
             <button type="button" id="downloadButton" class="dowlad-button">Скачать маршрут (KMZ)</button>
             <button onclick="disableAlerts(); buildRoute(); window.location.href='/elevation-map'" class="back-button">Перейти на карту для WKT</button>
-            <button type="button" id="start-drawing">Начать/Закончить рисовать зону запрета полетов</button>
-            <button type="button" id="build-restricted-area">Построить запретную зону</button>
-            <button type="button" id="orta-zapret">Ортодромия с зонами запрета <br> (каждое нажатие - перестроение)</button>
+            <button type="button" id="start-drawing" class="knopki-meny">Начать/Закончить рисовать зону запрета полетов</button>
+            <button type="button" id="build-restricted-area" class="knopki-meny">Построить запретную зону</button>
+            <button type="button" id="orta-zapret" class="knopki-meny">Ортодромия с зонами запрета <br> (каждое нажатие - перестроение)</button>
+            <button type="button" id="sendToDrone" class="send-button">Отправить данные на беспилотник</button>
+
         </div>
     </form>
 
@@ -1012,10 +1048,46 @@ fetch('/orthodrome', {
 .catch(error => console.error('Ошибка:', error));
 
 
- /////////////////////////////// KMZ /////////////////////
+ /////////////////////////////// отправка скорости и высоты на бекенд /////////////////////
+
+document.getElementById('form').addEventListener('submit', function (event) {
+    event.preventDefault();
+
+    const speed = document.getElementById('speed').value;  // Получаем значение скорости
+    const altitude = document.getElementById('altitude').value;  // Получаем значение высоты
+
+    buildRoute(speed, altitude);  // Передаем параметры скорости и высоты в функцию построения маршрута
 
 
+});
+/////////////////////////////// отправка скорости и высоты на бекенд /////////////////////
 
+/////////////////////////////// отправка данных на беспилотник через фронтенд /////////////////////
+
+document.getElementById('submit-button').addEventListener('click', function() {
+    // Получаем значения из формы
+    var speed = parseFloat(document.getElementById('speed').value);
+    var altitude = parseFloat(document.getElementById('altitude').value);
+
+    // Отправляем данные на сервер для дальнейшей передачи на беспилотник
+    fetch('/send_to_drone', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            speed: speed,
+            altitude: altitude
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("Команды переданы на беспилотник:", data);
+    })
+    .catch(error => {
+        console.error('Ошибка при отправке данных на сервер:', error);
+    });
+});
 
 
 

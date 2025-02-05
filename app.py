@@ -9,6 +9,7 @@ from rasterio.warp import transform
 from flask_cors import CORS
 import logging
 import os
+from pymavlink import mavutil
 
 # Создаем экземпляр Flask приложения
 app = Flask(__name__, static_folder='static')
@@ -20,6 +21,9 @@ app.debug = True
 
 # Папка для сохранения файлов в проекте (папка static)
 app.config['UPLOAD_FOLDER'] = 'static'  # Папка для сохранения файлов
+
+
+
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
@@ -107,6 +111,8 @@ def orthodrome():
         num_nodes = data.get('num_nodes', 1000)
         is_orthodrome = data.get('orthodrome', True)
         restricted_areas = data.get('restricted_areas', [])
+        speed = data.get('speed')  # Получаем скорость
+        altitude = data.get('altitude')  # Получаем высоту
 
         logging.debug(f"Start point: {start_point}, End point: {end_point}, Restricted areas: {restricted_areas}")
 
@@ -154,7 +160,9 @@ def orthodrome():
 
         return jsonify({
             "coordinates": coordinates,
-            "warning": None
+            "warning": None,
+            "speed": speed,  # Возвращаем скорость
+            "altitude": altitude  # Возвращаем высоту
         })
 
     except Exception as e:
@@ -164,7 +172,7 @@ def orthodrome():
 
 
 
-###################вв#############################################################
+################################################################################ обход зон запрета (расчет)
 from shapely.geometry import Point, LineString, Polygon
 from shapely.ops import nearest_points
 import logging
@@ -369,6 +377,53 @@ def create_kmz():
         logging.error(f"Ошибка при создании KMZ: {str(e)}")
         return jsonify({"error": "Ошибка при создании KMZ"}), 500
 #----------------------------------------------  --------------------------------------------
+#---------------------------------------------- подключение беспилотника через кабель или по IP + порт (UDP)  --------------------------------------------
+# Пример подключения через UDP, вы можете настроить это на свой порт или сокет.
+master = mavutil.mavlink_connection('udp:localhost:14550')  # Измените на ваш адрес
+
+# Функция для отправки команды по MAVLink
+def send_mavlink_command(speed, altitude):
+    # Стандартная команда для установки целевой позиции
+    # Установка позиции и высоты (в метрах)
+    master.mav.set_position_target_local_ned_send(
+        0,  # Время (0 означает немедленную отправку)
+        1,  # Идентификатор системы (обычно 1)
+        0,  # Идентификатор компонента
+        mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # Тип кадра координат (локальный NED)
+        0b0000111111111000,  # Маска параметров (скорость и высота)
+        0,  # x (относительно центра в NED)
+        0,  # y
+        -altitude,  # z (высота)
+        speed,  # скорость в метрах в секунду (например, на оси x)
+        0,  # Скорость по оси y
+        0,  # Скорость по оси z
+        0,  # Поворот по оси x
+        0,  # Поворот по оси y
+        0  # Поворот по оси z
+    )
+
+    print(f"Скорость: {speed} м/с, Высота: {altitude} м отправлены беспилотнику.")
+
+# Вызываем эту функцию, чтобы отправить параметры на беспилотник
+
+@app.route('/send_to_drone', methods=['POST'])
+def send_to_drone():
+    try:
+        data = request.json
+        speed = data.get('speed')
+        altitude = data.get('altitude')
+
+        if speed is None or altitude is None:
+            return jsonify({"error": "Скорость и высота не указаны"}), 400
+
+        # Отправляем данные на беспилотник
+        send_mavlink_command(speed, altitude)
+
+        return jsonify({"status": "Команды отправлены на беспилотник"})
+    except Exception as e:
+        return jsonify({"error": f"Ошибка при отправке команд: {str(e)}"}), 500
+
+#---------------------------------------------- подключение беспилотника через кабель или по IP + порт (UDP)  --------------------------------------------
 
 #########################2-я страница wkt ##########################################
 

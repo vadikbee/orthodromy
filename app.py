@@ -1,7 +1,7 @@
 #################################    ПОЯСНЕНИЕ    #################################
 
 #################################    сначала передается долгота, а потом широта (реверснуты) т.е где широта --> долгота    #################################
-
+from pymavlink import mavutil
 from flask import Flask, request, jsonify, render_template
 from pyproj import Geod
 import rasterio
@@ -9,13 +9,28 @@ from rasterio.warp import transform
 from flask_cors import CORS
 import logging
 import os
-from pymavlink import mavutil
+
 
 # Создаем экземпляр Flask приложения
 app = Flask(__name__, static_folder='static')
 
+# Настройка логирования
+logging.basicConfig(
+    level=logging.DEBUG,  # Уровень логирования DEBUG
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Формат вывода
+    handlers=[logging.StreamHandler()]  # Вывод в консоль
+)
+
+# Дополнительно настраиваем логирование для werkzeug
+werkzeug_log = logging.getLogger('werkzeug')
+werkzeug_log.setLevel(logging.DEBUG)  # Устанавливаем уровень логирования для werkzeug
+werkzeug_log.addHandler(logging.StreamHandler())  # Добавляем обработчик для вывода в консоль
+
+# Создание подключения
+master = mavutil.mavlink_connection('udp:localhost:14550')  # Замените на нужный адрес
+
 # Разрешаем CORS для этого приложения
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})  # Разрешить все домены
 # Включаем режим отладки
 app.debug = True
 
@@ -39,9 +54,8 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
 # Инициализация геоида WGS84 для вычисления ортодромии123
 geod = Geod(ellps="WGS84")
 
-# Настройка логирования
 
-logging.basicConfig(level=logging.DEBUG)
+
 
 
 # Маршрут для отображения главной HTML-страницы
@@ -174,11 +188,8 @@ def orthodrome():
 
 ################################################################################ обход зон запрета (расчет)
 from shapely.geometry import Point, LineString, Polygon
-from shapely.ops import nearest_points
 import logging
-from flask import Flask, request, jsonify
 import random
-import heapq
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -332,7 +343,7 @@ def orthodrome_with_restrictions():
 import zipfile
 import xml.etree.ElementTree as ET
 import os
-from flask import send_from_directory
+
 
 
 @app.route('/create_kmz', methods=['POST'])
@@ -378,34 +389,65 @@ def create_kmz():
         return jsonify({"error": "Ошибка при создании KMZ"}), 500
 #----------------------------------------------  --------------------------------------------
 #---------------------------------------------- подключение беспилотника через кабель или по IP + порт (UDP)  --------------------------------------------
-# Пример подключения через UDP, вы можете настроить это на свой порт или сокет.
-master = mavutil.mavlink_connection('udp:localhost:14550')  # Измените на ваш адрес
+import time
+
+
+
+
+# Функция для ожидания пульса с тайм-аутом
+def wait_for_heartbeat(timeout=3):
+    try:
+        master.wait_heartbeat(timeout=timeout)
+        logging.info("Соединение с беспилотником установлено!")
+        return True
+    except Exception as e:
+        logging.error(f"Ошибка при ожидании пульса: {e}")
+        return False
+
+
+@app.route('/connect', methods=['GET'])
+def connect_to_drone():
+    logging.info("Попытка подключиться к беспилотнику...")
+    if wait_for_heartbeat():
+        logging.info("Беспилотник подключен успешно!")
+        return jsonify({"status": "Беспилотник подключен и готов"}), 200
+    else:
+        logging.error("Не удалось подключиться к беспилотнику.")
+        return jsonify({"error": "Не удалось подключиться к беспилотнику"}), 500
+
 
 # Функция для отправки команды по MAVLink
 def send_mavlink_command(speed, altitude):
-    # Стандартная команда для установки целевой позиции
-    # Установка позиции и высоты (в метрах)
-    master.mav.set_position_target_local_ned_send(
-        0,  # Время (0 означает немедленную отправку)
-        1,  # Идентификатор системы (обычно 1)
-        0,  # Идентификатор компонента
-        mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # Тип кадра координат (локальный NED)
-        0b0000111111111000,  # Маска параметров (скорость и высота)
-        0,  # x (относительно центра в NED)
-        0,  # y
-        -altitude,  # z (высота)
-        speed,  # скорость в метрах в секунду (например, на оси x)
-        0,  # Скорость по оси y
-        0,  # Скорость по оси z
-        0,  # Поворот по оси x
-        0,  # Поворот по оси y
-        0  # Поворот по оси z
-    )
+    try:
+        master.mav.set_position_target_local_ned_send(
+            0,  # Время (0 означает немедленную отправку)
+            master.target_system,  # ID системы (используем целевую систему)
+            master.target_component,  # ID компонента
+            mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # Тип кадра
+            0b0000111111111000,  # Маска параметров
+            0,  # x
+            0,  # y
+            -altitude,  # z (в MAVLink высота отрицательная)
+            speed,  # скорость по оси x
+            0,  # скорость по оси y
+            0,  # скорость по оси z
+            0,  # Поворот по оси x
+            0,  # Поворот по оси y
+            0  # Поворот по оси z
+        )
 
-    print(f"Скорость: {speed} м/с, Высота: {altitude} м отправлены беспилотнику.")
+        # Ожидание подтверждения команды
+        ack = master.recv_match(type='COMMAND_ACK', blocking=True, timeout=2)
+        if ack:
+            logging.info(f"Команда принята: {ack}")
+        else:
+            logging.warning("Беспилотник не подтвердил команду.")
 
-# Вызываем эту функцию, чтобы отправить параметры на беспилотник
+    except Exception as e:
+        logging.error(f"Ошибка при отправке команды: {e}")
 
+
+# Обработчик для отправки данных на беспилотник
 @app.route('/send_to_drone', methods=['POST'])
 def send_to_drone():
     try:
@@ -413,14 +455,22 @@ def send_to_drone():
         speed = data.get('speed')
         altitude = data.get('altitude')
 
+        print(f"Получены данные: speed={speed}, altitude={altitude}")
+
         if speed is None or altitude is None:
+            print("Ошибка: Скорость и высота не указаны")
             return jsonify({"error": "Скорость и высота не указаны"}), 400
 
-        # Отправляем данные на беспилотник
+        if isinstance(speed, str) or isinstance(altitude, str):
+            print("Ошибка: Скорость и высота должны быть числами")
+            return jsonify({"error": "Скорость и высота должны быть числами"}), 400
+
         send_mavlink_command(speed, altitude)
 
+        print("Команды отправлены на беспилотник")
         return jsonify({"status": "Команды отправлены на беспилотник"})
     except Exception as e:
+        logging.error(f"Ошибка при отправке команд: {str(e)}")
         return jsonify({"error": f"Ошибка при отправке команд: {str(e)}"}), 500
 
 #---------------------------------------------- подключение беспилотника через кабель или по IP + порт (UDP)  --------------------------------------------
@@ -563,4 +613,4 @@ def get_elevation_from_dem(lon, lat):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True) ##

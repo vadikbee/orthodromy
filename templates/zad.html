@@ -520,10 +520,20 @@ document.addEventListener("DOMContentLoaded", function() {
             });
         }
 
-        // 🔹 Пример для другой кнопки
-        else if (newButton.id === "sendToDrone") {
+         // 🔹 Назначаем обработчики по ID кнопки
+        if (newButton.id === "sendToDrone") {
             newButton.addEventListener('click', function() {
-                console.log("кнопка (отправить данные) нажата!");
+                console.log("Кнопка 'отправить' работает!");
+                fetch('/send_to_drone', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log("Ответ сервера:", data);
+                        alert(data.connected ? "данные отправлены!" : "Беспилотник не подключен.");
+                    })
+                    .catch(error => {
+                        console.error("Ошибка запроса:", error);
+                        alert("Ошибка при подключении.");
+                    });
             });
         }
 

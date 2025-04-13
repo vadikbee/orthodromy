@@ -14,20 +14,22 @@ import os
 # Создаем экземпляр Flask приложения
 app = Flask(__name__, static_folder='static')
 
-# Настройка логирования
 logging.basicConfig(
-    level=logging.DEBUG,  # Уровень логирования DEBUG
-    format='%(asctime)s - %(levelname)s - %(message)s',  # Формат вывода
-    handlers=[logging.StreamHandler()]  # Вывод в консоль
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()]
 )
-
+logger = logging.getLogger(__name__)
 # Дополнительно настраиваем логирование для werkzeug
 werkzeug_log = logging.getLogger('werkzeug')
 werkzeug_log.setLevel(logging.DEBUG)  # Устанавливаем уровень логирования для werkzeug
 werkzeug_log.addHandler(logging.StreamHandler())  # Добавляем обработчик для вывода в консоль
 
+
 # Создание подключения
-master = mavutil.mavlink_connection('udp:localhost:14550')  # Замените на нужный адрес
+# Конфигурируемый адрес
+MAVLINK_URI = os.getenv('MAVLINK_URI', 'udp:127.0.0.1:14550')
+master = mavutil.mavlink_connection(MAVLINK_URI)
 
 # Разрешаем CORS для этого приложения
 CORS(app, resources={r"/*": {"origins": "*"}})  # Разрешить все домены
@@ -37,25 +39,20 @@ app.debug = True
 # Папка для сохранения файлов в проекте (папка static)
 app.config['UPLOAD_FOLDER'] = 'static'  # Папка для сохранения файлов
 
+#connection = mavutil.mavlink_connection('com3:115200')  ###подключене к дрону исправить
 
 
 
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
-    logging.info("Папка для сохранения файлов была создана.")
-else:
-    logging.info("Папка для сохранения файлов уже существует.")
+def ensure_folder_exists(folder_path):
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+        logging.info(f"Папка {folder_path} была создана.")
+    else:
+        logging.info(f"Папка {folder_path} уже существует.")
 
-
-# Убедитесь, что папка существует
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
 
 # Инициализация геоида WGS84 для вычисления ортодромии123
 geod = Geod(ellps="WGS84")
-
-
-
 
 
 # Маршрут для отображения главной HTML-страницы
@@ -160,7 +157,7 @@ def orthodrome():
 
         # Создаем маршрут
         if is_orthodrome:
-            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes + 2000)
+            points = geod.npts(lon1, lat1, lon2, lat2, num_nodes)
         else:
             lons = [lon1 + (lon2 - lon1) * i / (num_nodes - 1) for i in range(num_nodes)]
             lats = [lat1 + (lat2 - lat1) * i / (num_nodes - 1) for i in range(num_nodes)]
@@ -216,7 +213,7 @@ def interpolate_points(start, end, num_points=5):
         for i in range(1, num_points + 1)
     ]
 
-
+###################################################### ФУНКЦИЯ ОБХОДА ЗОН ЗАПРЕТА ######################################################
 def find_shortest_path_with_restrictions(start_point, end_point, restricted_areas):
     """
     Находит кратчайший путь с учетом зон запрета, обходя их с адаптивным смещением и проверкой возможности вернуться на прямую траекторию после обхода.
@@ -225,7 +222,7 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
     current_point = Point(start_point)
     max_iterations = 2000  # Ограничение на количество итераций
     buffer_distance = 0.006  # Начальное расстояние буфера вокруг запретной зоны
-    visited_points = set()  # Множество для отслеживания посещённых точек
+    visited_points = set()  # Множество для отслеживания посещённых точек 
 
     # Создаём буферные зоны для всех запретных зон
     buffered_areas = [area.buffer(buffer_distance) for area in restricted_areas]
@@ -298,7 +295,7 @@ def find_shortest_path_with_restrictions(start_point, end_point, restricted_area
     # Если не удалось достичь конечной точки, сообщаем о проблеме
     print("Не удалось найти маршрут, обходящий зоны запрета. Попробуйте изменить начальную или конечную точку.")
     return path
-
+###################################################### ФУНКЦИЯ ОБХОДА ЗОН ЗАПРЕТА ######################################################
 
 @app.route('/orthodrome_with_restrictions', methods=['POST'])
 def orthodrome_with_restrictions():
